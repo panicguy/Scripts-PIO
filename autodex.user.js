@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PIO AutoDex — Dudu
 // @namespace    https://github.com/panicguy/Scripts-PIO
-// @version      0.1.1
+// @version      0.1.2
 // @description  AutoDex: fila de capturas, navegação por Onde encontrar e retorno ao Centro Pokémon.
 // @author       Eduardo (Dudu)
 // @match        https://pokeidle.io/*
@@ -173,10 +173,10 @@
         save();
         status('Chegou ao Centro Pokémon. Indo para a próxima hunt...');
         await advance();
-      } else if (Date.now() - state.returnPending.requestedAt > 120000) {
-        // Sem sinal seguro de chegada, não viajar de forma antecipada.
-        state.paused = true; save();
-        status('Retorno solicitado, mas não consegui confirmar a chegada ao Centro em 2 minutos. Pausado por segurança.');
+      } else if (Date.now() - state.returnPending.requestedAt > 120000 && !state.returnPending.longWaitWarned) {
+        // O jogo pode levar mais tempo em uma batalha longa: nunca cancelar a espera.
+        state.returnPending.longWaitWarned = true; save();
+        status('Retorno ao Centro ainda agendado. Continuo aguardando a confirmação, sem repetir o clique e sem viajar antes.');
       }
       return;
     }
