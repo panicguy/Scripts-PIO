@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PIO AutoDex — Dudu
 // @namespace    https://github.com/panicguy/Scripts-PIO
-// @version      0.1.0
+// @version      0.1.1
 // @description  AutoDex: fila de capturas, navegação por Onde encontrar e retorno ao Centro Pokémon.
 // @author       Eduardo (Dudu)
 // @match        https://pokeidle.io/*
@@ -22,7 +22,7 @@
   const clean = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   let stored = {};
   try { stored = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch {}
-  const state = Object.assign({ queue: [], pos: 0, done: [], skipped: [], running: false, paused: false, current: null }, stored, { running: false, paused: false, current: null });
+  const state = Object.assign({ queue: [], pos: 0, done: [], skipped: [], running: false, paused: false, current: null, returnPending: null }, stored, { running: false, paused: false, current: null });
   let dex = [], busy = false, lastRefresh = 0, message = 'Abra a Pokédex e sincronize as espécies.';
   function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
   function status(s) { message = s; render(); }
@@ -97,36 +97,61 @@
     return true;
   }
   function centerButton() {
+    // Aciona o comando NATIVO; o próprio jogo agenda a volta ao fim do combate
+    // e aplica a regra de 3 segundos sem batalha.
     return buttonText(/ir para o centro pokemon|centro pokemon/);
   }
-  async function returnCenter() {
+  function centerConfirmed() {
+    // Só aceitar a localização atual no HUD (nunca o texto do botão
+    // "Ir para o Centro Pokémon", que aparece mesmo durante a hunt).
+    // Seletores conservadores: caso o jogo mude o DOM, manter a espera
+    // em vez de viajar prematuramente.
+    const selectors = [
+      '#local-atual', '#hud-local', '#hud-localizacao', '#local-nome',
+      '#campo-local', '#campo-nome', '#hunt-nome', '#localizacao-atual',
+      '.local-atual', '.hud-local', '.campo-local', '.localizacao-atual',
+      '[data-current-location]', '[data-current-map]', '[data-location-name]'
+    ];
+    return selectors.some(selector => all(selector).some(el => {
+      if (el.closest('button, nav, #pio-ad-panel, [role="dialog"]')) return false;
+      const source = [
+        val(el), el.getAttribute('data-current-location'),
+        el.getAttribute('data-current-map'), el.getAttribute('data-location-name')
+      ].filter(Boolean).join(' ');
+      return /centro pokemon|pokemon center|cerulean/i.test(clean(source));
+    }));
+  }
+  function returnCenter() {
+    if (state.returnPending) return true; // Nunca clicar duas vezes.
+    if (centerConfirmed()) {
+      status('Já está no Centro Pokémon. Próxima hunt liberada.');
+      return true;
+    }
     const center = centerButton();
     if (!center || center.disabled) {
       state.paused = true; save();
-      status('Centro Pokémon não localizado ou indisponível. Volte manualmente e clique em Continuar.');
+      status('Botão de retorno ao Centro Pokémon indisponível. Automação pausada.');
       return false;
     }
+    state.returnPending = { requestedAt: Date.now() };
+    save(); // Gravar ANTES de clicar para não criar dois agendamentos.
     center.click();
-    // O jogo exige 3 segundos sem batalha; acrescentamos margem para atualização.
-    await sleep(4500);
-    const indicator = buttonText(/desistir do combate/);
-    // Sem uma API de combate documentada não presumimos que um botão sempre montado prova combate ativo.
-    if (indicator && indicator.disabled === false && indicator.getAttribute('aria-pressed') === 'true') {
-      state.paused = true; save();
-      status('Combate ainda sinalizado como ativo. Aguarde e clique em Continuar.');
-      return false;
-    }
+    status('Volta solicitada ao Centro Pokémon. O jogo aguarda o fim da batalha e os 3 segundos necessários. Aguardando chegada...');
     return true;
   }
   async function advance() {
     if (busy || !state.running || state.paused) return;
     busy = true;
     try {
+      // Sem iniciar outra hunt enquanto o retorno nativo estiver agendado.
+      if (state.returnPending) return;
       while (state.running && !state.paused && state.pos < state.queue.length) {
         const s = state.queue[state.pos];
         if (caught(s) === true) {
           state.done.push(s.id); state.pos++; save();
-          if (!await returnCenter()) return;
+          if (!returnCenter()) return;
+          // Aguarda o jogo confirmar que realmente chegou ao Centro.
+          if (state.returnPending) return;
           continue;
         }
         if (state.current?.id === s.id) return;
@@ -141,13 +166,27 @@
   }
   async function poll() {
     if (!state.running || state.paused || busy) return;
+    if (state.returnPending) {
+      // NÃO há sleep fixo: é o jogo que decide quando completou a volta.
+      if (centerConfirmed()) {
+        state.returnPending = null;
+        save();
+        status('Chegou ao Centro Pokémon. Indo para a próxima hunt...');
+        await advance();
+      } else if (Date.now() - state.returnPending.requestedAt > 120000) {
+        // Sem sinal seguro de chegada, não viajar de forma antecipada.
+        state.paused = true; save();
+        status('Retorno solicitado, mas não consegui confirmar a chegada ao Centro em 2 minutos. Pausado por segurança.');
+      }
+      return;
+    }
     const current = state.current;
     if (!current) { await advance(); return; }
     // A Pokédex, não o histórico limitado a 100 capturas, confirma a espécie capturada.
     if (caught(current) === true) {
       state.done.push(current.id); state.pos++; state.current = null; save();
-      status('Capturou ' + current.name + '! Voltando ao Centro Pokémon...');
-      if (await returnCenter()) await advance();
+      status('Capturou ' + current.name + '! Solicitando retorno ao Centro Pokémon...');
+      if (returnCenter() && !state.returnPending) await advance();
     } else if (Date.now() - current.since > 20 * 60 * 1000) {
       state.paused = true; save();
       status('20 minutos sem confirmação de captura. Pausado para conferir bolas, batalha e hunt.');
@@ -189,7 +228,7 @@
       if (action==='queue') {
         if (!dex.length && !await sync()) return;
         state.queue=dex.filter(s=>!s.caught).map(({id,name})=>({id,name}));
-        state.pos=0;state.done=[];state.skipped=[];state.current=null;state.running=false;save();
+        state.pos=0;state.done=[];state.skipped=[];state.current=null;state.returnPending=null;state.running=false;save();
         status('Fila criada: '+state.queue.length+' espécies pendentes.');
       }
       if (action==='run') {
@@ -197,7 +236,7 @@
         state.running=true;state.paused=false;save();await advance();
       }
       if (action==='pause') { state.paused=!state.paused;save();status(state.paused?'Pausado.':'Retomando...');if(!state.paused)await advance(); }
-      if (action==='stop') { state.running=false;state.paused=false;state.current=null;save();status('Parado. A fila foi preservada.'); }
+      if (action==='stop') { state.running=false;state.paused=false;state.current=null;state.returnPending=null;save();status('Parado. A fila foi preservada.'); }
       render();
     });
     one('#pio-ad-filter',p).addEventListener('change',render);
@@ -207,7 +246,7 @@
     const p=one('#pio-ad-panel');
     if (!p) return;
     one('#pio-ad-status',p).textContent=message;
-    one('#pio-ad-progress',p).textContent='Progresso '+state.pos+'/'+state.queue.length+' · Confirmados '+state.done.length+' · Pulados '+state.skipped.length+(state.current?' · Hunt: '+state.current.name:'');
+    one('#pio-ad-progress',p).textContent='Progresso '+state.pos+'/'+state.queue.length+' · Confirmados '+state.done.length+' · Pulados '+state.skipped.length+(state.returnPending?' · Retorno ao Centro agendado':(state.current?' · Hunt: '+state.current.name:''));
     const f=one('#pio-ad-filter',p).value;
     const rows=dex.filter(s=>f==='all'||(f==='caught'?s.caught:!s.caught)).slice(0,180);
     one('#pio-ad-list',p).replaceChildren(...rows.map(s=>{
