@@ -1,50 +1,42 @@
-# Scripts PIO — AutoDex v0.2.0
+# Scripts PIO — AutoDex v0.2.1
 
-Userscript **AutoDex • Dudu** para [pokeidle.io](https://pokeidle.io/app).
+Userscript para [pokeidle.io](https://pokeidle.io/app). Painel **AutoDex by Dudu**, ao lado da Pokédex, com o mesmo ícone e visual marrom/dourado inspirado no jogo.
 
-## Instalação
+## Instalação / atualização
 
-1. Instale Tampermonkey.
-2. Abra [Instalar AutoDex](https://raw.githubusercontent.com/panicguy/Scripts-PIO/main/autodex.user.js) e confirme a atualização/instalação.
-3. **Recarregue a página** do jogo para desligar a versão antiga.
-4. Clique no botão **AutoDex**, com o mesmo ícone da **Pokédex**, na barra superior.
-5. Clique em **Sincronizar → Criar fila → Iniciar**. A fila prioriza os Pokémon *vistos* e ainda não capturados.
+1. No Tampermonkey, atualize o script existente ou instale [autodex.user.js](https://raw.githubusercontent.com/panicguy/Scripts-PIO/main/autodex.user.js).
+2. **Recarregue a página do jogo**, para retirar a versão antiga que continua na memória da aba.
+3. Clique em **AutoDex → Sincronizar → Criar fila → Iniciar**.
+4. **Antes da primeira viagem, esteja no Centro Pokémon.** Se estiver caçando, volte manualmente ao Centro e clique em Iniciar outra vez. Esse bloqueio evita tentar viajar diretamente entre hunts.
 
-## Funcionamento
+## O que foi corrigido nesta versão
 
-- Identifica os 1.248 cards da Pokédex por `.dex-card`. `pego` = espécie já registrada; `visto` ou `desconhecido` = ainda não registrada.
-- Usa a ficha e o botão **Onde encontrar** (`#ficha-corpo .fi-hunts .fi-hunt[data-hunt]`) para viajar para hunts normais. Ao chegar, verifica o `#hud-hunt`.
-- Durante a hunt, monitora o botão superior `nav.menu-topo button[data-modal="pokedex"]`, que passa a mostrar **Pokédex +1** quando uma espécie nova é registrada.
-- **Um aviso anterior não conta como captura:** guarda o valor do contador antes de entrar na hunt e só aceita aumento posterior enquanto o HUD ainda mostra a espécie selecionada. Também considera o card atualizado para `.dex-card.pego`.
-- Ao detectar a captura, **clica uma única vez no agendador `#rb-center-schedule`**, se ainda não estiver em `aria-pressed="true"`. Não clica no botão `#ir-centro`, que pode estar desabilitado durante a luta.
-- O jogo gerencia o fim da batalha e os **3 segundos sem combate**. O script não adiciona espera artificial: aguarda o HUD identificar **Centro Pokémon**, e só então vai para a próxima hunt.
-- O painel **AutoDex pode ser fechado**; a automação continua na aba do jogo enquanto esta permanecer aberta.
-- Pokémon sem hunt comum são marcados como **pendentes especiais** (Boss, Mystic Ticket, Mega, Safari etc.), nunca como capturados. A captura em si usa as configurações normais de combate e Poké Balls do jogo.
+- **Nomes legíveis:** o DOM usa `.dex-card` com `.pego`, `.visto`, `.desconhecido`; a palavra `???` era realmente exibida pela Pokédex para desconhecidos. O AutoDex resolve nomes usando um **catálogo de 1.247 espécies** exportado pelo jogador, dando prioridade ao nome exibido pelo próprio jogo quando conhecido. Uma espécie adicionada depois desse catálogo pode aparecer como `Pokémon #ID`; não é inventado um nome.
+- **✓ e ×:** estado capturado/pendente direto na lista, exibida somente após **Sincronizar**; filtro, pesquisa e painel mais compacto no estilo do jogo.
+- **Fila:** prioriza espécies `visto` e depois as ainda `desconhecido`. Espécies especiais sem hunt normal identificadas no catálogo são marcadas como pendentes especiais, não como capturadas.
+- **Viajar:** só inicia a hunt partindo do Centro Pokémon; tenta abrir a ficha e clica em `#ficha-corpo .fi-hunts button.fi-hunt[data-hunt]`, confirmando a entrada por `#hud-hunt`.
+- **Captura:** a Pokédex sinaliza **+1** no botão superior da Pokédex quando uma espécie nova é capturada. O script observa aumento em relação ao valor de antes da hunt, **enquanto o HUD corresponde à espécie selecionada**. Também aceita `.dex-card.pego` atualizado.
+- **Retorno:** após detectar a captura, utiliza `#rb-center-schedule` **uma única vez**; se `aria-pressed="true"`, não clica, pois outro clique cancelaria o agendamento. O próprio jogo controla os três segundos sem combate.
+- **Próxima hunt:** o script não libera nova viagem até `#hud-hunt` mostrar `Centro Pokémon`.
+- **Pausa/Retomada:** conserva a posição da fila. Se a hunt não for confirmada, pausa; ao retomar do Centro, tenta a mesma espécie outra vez.
+- A janela AutoDex pode permanecer **fechada** enquanto funciona, mas a aba do jogo precisa continuar aberta.
 
-## Teste recomendado
+## Teste controlado
 
-1. Faça o teste com um Pokémon **visto, mas não capturado**, de captura rápida e em uma hunt acessível.
-2. Clique em **Sincronizar**, **Criar fila** e **Iniciar**. Acompanhe o HUD: o AutoDex deve entrar na hunt correta.
-3. Quando surgir **Pokédex +1**, o botão nativo de agendamento do Centro deverá ativar; espere o personagem chegar ao Centro.
-4. Confira se a próxima hunt começa **somente depois** do retorno.
-
-Se algo falhar, abra o Console (F12) e execute:
+1. Instale v0.2.1 e recarregue a página.
+2. Vá ao Centro Pokémon, abra o AutoDex, clique em **Sincronizar** e confira se nomes como Caterpie, Gastly e Ivysaur aparecem, sem `???`.
+3. Clique em **Criar fila → Iniciar** e verifique a hunt escolhida.
+4. Após surgir o aviso **Pokédex +1** (espécie nova), confira se o retorno fica agendado e se a próxima hunt só começa quando o Centro aparecer no HUD.
+5. Se parar ou errar a localização, abra F12 → Console e execute:
 
 ```javascript
 PIOAutoDex.diagnostico()
 ```
 
-Envie a saída e explique em qual etapa ficou parado. **Não compartilhe cookies, tokens, URLs de sessão, nem cabeçalhos de autenticação.**
+Envie a saída para investigar. **Não compartilhe tokens, cookies nem credenciais.**
 
-## Estado e limites
+## Limitações
 
-**v0.2.0 — integração ainda não validada ponta a ponta em uma conta autenticada.** Os seletores da Pokédex, do aviso +1, do HUD e do agendador foram fundamentados nos diagnósticos fornecidos, mas abrir a ficha e viajar programaticamente ainda precisam ser testados no jogo.
+**A sintaxe foi verificada, mas a v0.2.1 ainda precisa de teste de ponta a ponta numa conta autenticada.** A leitura do catálogo é baseada numa exportação com 1.247 espécies enquanto a interface mostrou 1.248. O indicador `Pokédex +1` informa uma nova espécie, mas não revela o ID dela sozinho; por isso o script relaciona o evento à hunt atual confirmada no HUD, e pode pausar se o jogo mudar o layout. Captura/bolas dependem das opções normais do jogo. Retorno agendado por outro script não é cancelado pelo botão Parar do AutoDex. Ao recarregar a página, o script **não volta a caçar automaticamente**.
 
-- O script pausa quando não consegue confirmar uma entrada na hunt, um botão de retorno ou a localização correta.
-- Ele não força uma viagem, não contorna bloqueios de navegação nem desiste do combate.
-- Se a página for atualizada, o script **não retoma sozinho**: conserva a fila e a posição, e você decide quando reiniciar.
-- Parar o AutoDex **não cancela** um retorno já agendado pelo próprio jogo.
-- O aviso **Pokédex +1** não identifica a espécie sozinho; a associação é inferida pela hunt atual indicada no HUD, então deve ser validada em teste real.
-- A Pokédex pode montar/desmontar cards quando a janela é aberta. Por isso o aviso do menu é a principal detecção em tempo real; o histórico de capturas não é necessário para decidir a próxima hunt.
-
-Referência conceitual: [PIW Auto Pokédex de Luis Ferreira](https://github.com/luishferreira/poke-standalone-scripts/blob/master/auto-pokedex.user.js), criado para outro jogo/domínio. O AutoDex utiliza código próprio.
+Crédito conceitual: [PIW Auto Pokédex — Luis Ferreira](https://github.com/luishferreira/poke-standalone-scripts/blob/master/auto-pokedex.user.js), criado para outro jogo. O código AutoDex desta versão é próprio.
