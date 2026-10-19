@@ -280,16 +280,14 @@
   async function cycle() {
     if (!state.running || state.paused || busy || polling) return;
     polling = true;
-    let shouldAdvance = false;
-    try {
+     try {
       if (state.returnPending) {
         if (isCenter()) {
           state.returnPending = null;
           phase = 'center';
           store();
           say('Chegou ao Centro Pokémon. Preparando a próxima hunt.', 'success');
-          shouldAdvance = true;
-        } else {
+         } else {
           const btn = centerButton();
           if (btn?.getAttribute('aria-pressed') === 'true') {
             state.returnPending.confirmed = true;
@@ -309,7 +307,7 @@
       }
 
       const active = state.current;
-      if (!active) { shouldAdvance = true; return; }
+      if (!active) { await advance(); return; }
 
       if (targetAtHud(active)) {
         active.missingSince = null;
@@ -344,8 +342,7 @@
         }
       }
     } finally { polling = false; }
-    if (shouldAdvance) await advance();
-  }
+   }
 
   const CSS = [
     '#pio-ad-menu img{height:20px;width:20px;object-fit:contain}',
@@ -445,6 +442,12 @@
           state.running = false; state.paused = false; store();
           say('Vá ao Centro Pokémon antes de iniciar. Depois clique em Iniciar.', 'warning');
           return;
+        }
+        // Se uma tentativa anterior foi pausada e o jogador retornou ao Centro,
+        // recomeça a MESMA espécie em vez de esperar uma hunt que já não existe.
+        if (state.paused && state.current && isCenter() && !state.returnPending) {
+          log('Retomada no Centro: repetindo ' + state.current.name);
+          state.current = null;
         }
         state.running = true; state.paused = false; store();
         phase = 'ready'; say('AutoDex iniciado.', 'success');
