@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PIO AutoDex — Dudu
 // @namespace    https://github.com/panicguy/Scripts-PIO
-// @version      0.1.2
+// @version      0.2.0
 // @description  AutoDex: fila de capturas, navegação por Onde encontrar e retorno ao Centro Pokémon.
 // @author       Eduardo (Dudu)
 // @match        https://pokeidle.io/*
@@ -22,7 +22,7 @@
   const clean = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   let stored = {};
   try { stored = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch {}
-  const state = Object.assign({ queue: [], pos: 0, done: [], skipped: [], running: false, paused: false, current: null, returnPending: null }, stored, { running: false, paused: false, current: null });
+  const state = Object.assign({ queue: [], pos: 0, done: [], skipped: [], running: false, paused: false, current: null, returnPending: null }, stored, { running: false, paused: false, current: null, returnPending: null });
   let dex = [], busy = false, lastRefresh = 0, message = 'Abra a Pokédex e sincronize as espécies.';
   function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
   function status(s) { message = s; render(); }
@@ -31,16 +31,18 @@
   }
   function dexButton() { return one('nav.menu-topo button[data-modal="pokedex"]'); }
   function parseCell(el) {
-    const idRaw = el.dataset.especie || el.dataset.species || el.dataset.id || el.dataset.dex || val(one('.dex-num, .dex-numero', el));
-    const id = Number(String(idRaw || '').replace(/[^0-9]/g, ''));
-    const name = val(one('.dex-nome, .dex-name, .nome, .pk-nome, strong, b', el)) || el.title || '';
+    // DOM confirmado em jogo: 1248 cards ".dex-card" com "pego", "visto" e "desconhecido".
+    const m = val(el).replace(/\s+/g, ' ').match(/#\s*(\d+)\s+(.+)/);
+    const id = Number(m?.[1] || el.dataset.especie || el.dataset.id);
+    const name = (m?.[2] || val(one('.dex-nome, b, strong', el))).trim();
     if (!id || !name) return null;
-    return { id, name, caught: el.classList.contains('caught') };
+    return { id, name, caught: el.classList.contains('pego'),
+      seen: el.classList.contains('visto'), unknown: el.classList.contains('desconhecido') };
   }
   function readDex() {
-    const cells = all('.dex-cell');
+    const cells = all('.dex-card');
     const rows = cells.map(parseCell).filter(Boolean);
-    if (!rows.length) return false;
+    if (rows.length < 100) return false;
     dex = Array.from(new Map(rows.map(s => [s.id, s])).values()).sort((a,b) => a.id-b.id);
     lastRefresh = Date.now();
     status('Pokédex lida: ' + dex.length + ' espécies; ' + dex.filter(e => !e.caught).length + ' não capturadas.');
@@ -50,20 +52,34 @@
     if (readDex()) return true;
     const btn = dexButton();
     if (!btn) { status('Menu Pokédex não encontrado.'); return false; }
-    btn.click();
-    await sleep(700);
-    if (!readDex()) { status('Não foi possível ler as células da Pokédex. Abra a Pokédex e confira o layout.'); return false; }
-    return true;
+    btn.click(); // Carregamento inicial sob demanda; a Dex pode ficar fechada depois.
+    for (let i = 0; i < 20; i++) {
+      await sleep(300);
+      if (readDex()) return true;
+    }
+    status('Não foi possível carregar os cards .dex-card; confira a Pokédex.');
+    return false;
   }
   function matchCell(species) {
-    return all('.dex-cell').find(el => {
-      const entry = parseCell(el);
-      return entry?.id === species.id || (entry && clean(entry.name) === clean(species.name));
+    return all('.dex-card').find(el => {
+      const match = val(el).match(/#\s*(\d+)/);
+      return Number(match?.[1] || el.dataset.especie || el.dataset.id) === species.id;
     });
   }
   function caught(species) {
     const cell = matchCell(species);
-    return cell ? cell.classList.contains('caught') : null;
+    return cell ? cell.classList.contains('pego') : null;
+  }
+  function bannerCount() {
+    const label = clean(val(dexButton()));
+    const m = label.match(/pokedex\s*\+\s*(\d+)/);
+    return m ? Number(m[1]) : 0;
+  }
+  function hudText() { return clean(val(one('#hud-hunt'))); }
+  function atCenter() { return /centro pokemon|pokemon center/.test(hudText()); }
+  function atHunt(species) {
+    const place = hudText(), name = clean(species?.name);
+    return !!name && (place === name || place.startsWith(name + ' ') || place.startsWith(name + '·'));
   }
   async function speciesSheet(species) {
     let cell = matchCell(species);
@@ -72,13 +88,17 @@
       cell = matchCell(species);
     }
     if (!cell) return false;
-    cell.click();
-    for (let t=0;t<12;t++) {
-      await sleep(250);
-      const body = one('#ficha-corpo');
-      const id = Number(val(one('.fi-dex-num', body || document)).replace(/[^0-9]/g, ''));
-      const name = val(one('.fi-nome', body || document));
-      if (body && (id === species.id || clean(name) === clean(species.name))) return true;
+    // Primeiro tenta abrir direto pelo card já montado, mesmo com a Dex fechada.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt) dexButton()?.click();
+      cell.click();
+      for (let t = 0; t < 14; t++) {
+        await sleep(250);
+        const body = one('#ficha-corpo');
+        const id = Number(val(one('.fi-dex-num', body || document)).replace(/\D/g, ''));
+        const name = val(one('.fi-nome', body || document));
+        if (body && (id === species.id || clean(name) === clean(species.name))) return true;
+      }
     }
     return false;
   }
@@ -86,111 +106,132 @@
     return one('#ficha-corpo .fi-hunts button.fi-hunt[data-hunt]:not(.fi-safari-cta)');
   }
   async function startHunt(species) {
-    if (!await speciesSheet(species)) { status('Ficha indisponível: ' + species.name); return false; }
+    if (!await speciesSheet(species)) {
+      state.paused = true; save();
+      status('Não consegui abrir a ficha de ' + species.name + '; pausado para evitar perder a fila.');
+      return 'error';
+    }
     const go = huntingDestination();
-    if (!go || go.disabled) { status('Sem hunt direta acessível: ' + species.name); return false; }
-    go.click(); // Reutiliza o caminho oficial Onde encontrar.
-    await sleep(1200);
-    state.current = { id: species.id, name: species.name, since: Date.now() };
+    if (!go || go.disabled) return 'unavailable';
+    // A referência é o contador antes de clicar. +1 anterior não é uma captura nova.
+    state.current = {
+      id: species.id, name: species.name, since: Date.now(),
+      hunt: go.dataset.hunt, arrivedAt: null, badgeBefore: bannerCount(),
+      wasCaught: caught(species) === true
+    };
     save();
-    status('Caçando ' + species.name + '. Painel pode ser fechado; a rotina continua nesta aba.');
-    return true;
-  }
-  function centerButton() {
-    // Aciona o comando NATIVO; o próprio jogo agenda a volta ao fim do combate
-    // e aplica a regra de 3 segundos sem batalha.
-    return buttonText(/ir para o centro pokemon|centro pokemon/);
-  }
-  function centerConfirmed() {
-    // Só aceitar a localização atual no HUD (nunca o texto do botão
-    // "Ir para o Centro Pokémon", que aparece mesmo durante a hunt).
-    // Seletores conservadores: caso o jogo mude o DOM, manter a espera
-    // em vez de viajar prematuramente.
-    const selectors = [
-      '#local-atual', '#hud-local', '#hud-localizacao', '#local-nome',
-      '#campo-local', '#campo-nome', '#hunt-nome', '#localizacao-atual',
-      '.local-atual', '.hud-local', '.campo-local', '.localizacao-atual',
-      '[data-current-location]', '[data-current-map]', '[data-location-name]'
-    ];
-    return selectors.some(selector => all(selector).some(el => {
-      if (el.closest('button, nav, #pio-ad-panel, [role="dialog"]')) return false;
-      const source = [
-        val(el), el.getAttribute('data-current-location'),
-        el.getAttribute('data-current-map'), el.getAttribute('data-location-name')
-      ].filter(Boolean).join(' ');
-      return /centro pokemon|pokemon center|cerulean/i.test(clean(source));
-    }));
+    status('Entrando na hunt de ' + species.name + '. Aguardando confirmação pelo HUD...');
+    go.click();
+    return 'started';
   }
   function returnCenter() {
-    if (state.returnPending) return true; // Nunca clicar duas vezes.
-    if (centerConfirmed()) {
-      status('Já está no Centro Pokémon. Próxima hunt liberada.');
-      return true;
-    }
-    const center = centerButton();
-    if (!center || center.disabled) {
+    if (state.returnPending) return true;
+    if (atCenter()) return true;
+    // Este é o AGENDADOR REAL; #ir-centro fica desabilitado durante a batalha.
+    const btn = one('#rb-center-schedule');
+    if (!btn || btn.disabled) {
       state.paused = true; save();
-      status('Botão de retorno ao Centro Pokémon indisponível. Automação pausada.');
+      status('Agendador do Centro Pokémon não encontrado. Automação pausada.');
       return false;
     }
-    state.returnPending = { requestedAt: Date.now() };
-    save(); // Gravar ANTES de clicar para não criar dois agendamentos.
-    center.click();
-    status('Volta solicitada ao Centro Pokémon. O jogo aguarda o fim da batalha e os 3 segundos necessários. Aguardando chegada...');
+    const already = btn.getAttribute('aria-pressed') === 'true';
+    state.returnPending = { requestedAt: Date.now(), verified: already, warned: false };
+    save();
+    // Se já está "true", novo clique CANCELARIA o retorno.
+    if (!already) btn.click();
+    status(already
+      ? 'Retorno ao Centro já estava agendado. Aguardando chegada...'
+      : 'Retorno ao Centro solicitado. O jogo espera o fim do combate e 3 segundos sem batalha.');
     return true;
   }
+  function finishCapture(species, evidence) {
+    if (!state.current || state.current.id !== species.id) return;
+    if (!state.done.includes(species.id)) state.done.push(species.id);
+    const item = dex.find(x => x.id === species.id);
+    if (item) item.caught = true; // Progressão local mesmo com a Pokédex fechada.
+    state.current = null;
+    state.pos++;
+    save();
+    status('Nova espécie: ' + species.name + ' (' + evidence + '). Agendando Centro Pokémon...');
+    if (returnCenter() && !state.returnPending) void advance();
+  }
   async function advance() {
-    if (busy || !state.running || state.paused) return;
+    if (busy || !state.running || state.paused || state.current || state.returnPending) return;
     busy = true;
     try {
-      // Sem iniciar outra hunt enquanto o retorno nativo estiver agendado.
-      if (state.returnPending) return;
-      while (state.running && !state.paused && state.pos < state.queue.length) {
-        const s = state.queue[state.pos];
-        if (caught(s) === true) {
-          state.done.push(s.id); state.pos++; save();
-          if (!returnCenter()) return;
-          // Aguarda o jogo confirmar que realmente chegou ao Centro.
-          if (state.returnPending) return;
-          continue;
+      let attempts = 0;
+      while (state.running && !state.paused && !state.current && !state.returnPending &&
+             state.pos < state.queue.length && attempts++ < 4) {
+        const species = state.queue[state.pos];
+        // Pode ter sido capturado manualmente desde que a fila foi criada.
+        if (caught(species) === true) { state.pos++; save(); continue; }
+        const result = await startHunt(species);
+        if (result === 'started' || result === 'error') return;
+        if (result === 'unavailable') {
+          if (!state.skipped.includes(species.id)) state.skipped.push(species.id);
+          state.pos++; save();
+          status('Sem hunt normal para ' + species.name + '; deixado como pendente especial.');
         }
-        if (state.current?.id === s.id) return;
-        if (await startHunt(s)) return;
-        state.skipped.push(s.id); state.pos++; save();
       }
       if (state.pos >= state.queue.length && state.running) {
-        state.running = false; state.current = null; save();
-        status('Fila finalizada. Espécies sem hunt direta estão na lista de puladas.');
+        state.running = false; save();
+        status('Fila percorrida; ' + state.skipped.length + ' espécies sem hunt normal.');
       }
     } finally { busy = false; }
   }
   async function poll() {
     if (!state.running || state.paused || busy) return;
     if (state.returnPending) {
-      // NÃO há sleep fixo: é o jogo que decide quando completou a volta.
-      if (centerConfirmed()) {
-        state.returnPending = null;
-        save();
-        status('Chegou ao Centro Pokémon. Indo para a próxima hunt...');
+      if (atCenter()) {
+        state.returnPending = null; save();
+        status('Chegada ao Centro confirmada por #hud-hunt. Próxima hunt...');
         await advance();
-      } else if (Date.now() - state.returnPending.requestedAt > 120000 && !state.returnPending.longWaitWarned) {
-        // O jogo pode levar mais tempo em uma batalha longa: nunca cancelar a espera.
-        state.returnPending.longWaitWarned = true; save();
-        status('Retorno ao Centro ainda agendado. Continuo aguardando a confirmação, sem repetir o clique e sem viajar antes.');
+      } else {
+        const sched = one('#rb-center-schedule');
+        if (sched?.getAttribute('aria-pressed') === 'true') state.returnPending.verified = true;
+        if (!state.returnPending.verified && Date.now() - state.returnPending.requestedAt > 6000) {
+          state.paused = true; save();
+          status('O jogo não confirmou o agendamento; pausado. Confira o botão do Centro.');
+        } else if (!state.returnPending.warned &&
+          Date.now() - state.returnPending.requestedAt > 120000) {
+          state.returnPending.warned = true; save();
+          status('Ainda esperando o Centro; não vou cancelar o agendamento nem viajar antes da chegada.');
+        }
       }
       return;
     }
     const current = state.current;
     if (!current) { await advance(); return; }
-    // A Pokédex, não o histórico limitado a 100 capturas, confirma a espécie capturada.
-    if (caught(current) === true) {
-      state.done.push(current.id); state.pos++; state.current = null; save();
-      status('Capturou ' + current.name + '! Solicitando retorno ao Centro Pokémon...');
-      if (returnCenter() && !state.returnPending) await advance();
-    } else if (Date.now() - current.since > 20 * 60 * 1000) {
+    if (atHunt(current)) {
+      if (!current.arrivedAt) {
+        current.arrivedAt = Date.now(); save();
+        status('Hunt confirmada: ' + current.name + '. Aguardando Pokédex +1.');
+      }
+      if (caught(current) === true && !current.wasCaught) {
+        finishCapture(current, 'card pego');
+        return;
+      }
+      const nowBadge = bannerCount();
+      if (nowBadge > current.badgeBefore) {
+        // Só considerar +1 NOVO, na hunt correspondente; +1 antigo é ignorado.
+        finishCapture(current, 'menu Pokédex +' + nowBadge);
+        return;
+      }
+      if (nowBadge < current.badgeBefore) {
+        // O contador foi limpo ao abrir a Pokédex; redefine a referência.
+        current.badgeBefore = nowBadge; save();
+      }
+    } else if (!current.arrivedAt && Date.now() - current.since > 20000) {
       state.paused = true; save();
-      status('20 minutos sem confirmação de captura. Pausado para conferir bolas, batalha e hunt.');
+      status('Não consegui confirmar a entrada em ' + current.name + ' pelo #hud-hunt.');
+    } else if (current.arrivedAt) {
+      current.lostAt ||= Date.now();
+      if (Date.now() - current.lostAt > 5000) {
+        state.paused = true; save();
+        status('HUD não corresponde mais à hunt ' + current.name + '; pausado por segurança.');
+      }
     }
+    if (atHunt(current)) current.lostAt = null;
   }
   const style = document.createElement('style');
   style.textContent = `
@@ -227,16 +268,16 @@
       if (action==='sync') await sync();
       if (action==='queue') {
         if (!dex.length && !await sync()) return;
-        state.queue=dex.filter(s=>!s.caught).map(({id,name})=>({id,name}));
+        state.queue=dex.filter(s=>!s.caught).sort((a,b)=>Number(b.seen)-Number(a.seen)||a.id-b.id).map(({id,name})=>({id,name}));
         state.pos=0;state.done=[];state.skipped=[];state.current=null;state.returnPending=null;state.running=false;save();
-        status('Fila criada: '+state.queue.length+' espécies pendentes.');
+        status('Fila criada: '+state.queue.length+' pendentes (vistos primeiro).');
       }
       if (action==='run') {
         if (!state.queue.length) { status('Crie a fila antes de iniciar.');return; }
         state.running=true;state.paused=false;save();await advance();
       }
-      if (action==='pause') { state.paused=!state.paused;save();status(state.paused?'Pausado.':'Retomando...');if(!state.paused)await advance(); }
-      if (action==='stop') { state.running=false;state.paused=false;state.current=null;state.returnPending=null;save();status('Parado. A fila foi preservada.'); }
+      if (action==='pause') { state.paused=!state.paused;save();status(state.paused?'Pausado.':'Retomando...');if(!state.paused){await poll();await advance();} }
+      if (action==='stop') { state.running=false;state.paused=false;state.current=null;state.returnPending=null;save();status('Parado. Fila preservada; o agendamento nativo existente não é cancelado.'); }
       render();
     });
     one('#pio-ad-filter',p).addEventListener('change',render);
@@ -252,19 +293,31 @@
     one('#pio-ad-list',p).replaceChildren(...rows.map(s=>{
       const d=document.createElement('div');
       d.className='species';
-      d.textContent='#'+s.id+' '+s.name+(s.caught?' ✓':' ○');
+      d.textContent='#'+s.id+' '+s.name+(s.caught?' ✓':(s.seen?' ◉':' ○'));
       return d;
     }));
   }
-  const observer=new MutationObserver(() => {
-    if (!one('#pio-ad-menu') || !one('#pio-ad-panel')) mount();
-    // Observe caught state even with the AutoDex panel hidden.
-    if (state.current) {
-      const c=caught(state.current);
-      if(c===true && !busy) poll().catch(console.warn);
+  window.PIOAutoDex = {
+    diagnostico() {
+      return {
+        version: '0.2.0', cards: all('.dex-card').length,
+        caught: all('.dex-card.pego').length, banner: bannerCount(),
+        hud: val(one('#hud-hunt')),
+        centerScheduled: one('#rb-center-schedule')?.getAttribute('aria-pressed'),
+        state: { running: state.running, paused: state.paused, pos: state.pos,
+          queue: state.queue.length, current: state.current, returnPending: state.returnPending },
+        message
+      };
     }
-  });
-  observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
-  setInterval(()=>{mount();poll().catch(console.warn);},1600);
+  };
+  setInterval(() => {
+    mount();
+    if (state.running) poll().catch(error => {
+      console.error('[AutoDex]', error);
+      state.paused = true; save();
+      status('Falha interna; confira o Console.');
+    });
+  }, 600);
   mount();
+
 })();
