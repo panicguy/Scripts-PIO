@@ -1,42 +1,115 @@
-# Scripts PIO — AutoDex v0.2.1
+<p align="center">
+  <img src="assets/pio-scripts-logo.png" alt="PIO Scripts by KimJongDudu" width="900">
+</p>
 
-Userscript para [pokeidle.io](https://pokeidle.io/app). Painel **AutoDex by Dudu**, ao lado da Pokédex, com o mesmo ícone e visual marrom/dourado inspirado no jogo.
+<p align="center">
+  <strong>Uma coleção de userscripts para facilitar sua jornada no PokéIdle.</strong><br>
+  Pokédex, caça, mercado e acompanhamento de farm — direto no navegador.
+</p>
 
-## Instalação / atualização
+<p align="center">
+  <a href="https://raw.githubusercontent.com/panicguy/Scripts-PIO/main/autodex.user.js">📖 Instalar AutoDex</a>
+  &nbsp; · &nbsp;
+  <a href="https://raw.githubusercontent.com/panicguy/Scripts-PIO/main/auto-sniper.user.js">🎯 Instalar Auto-Sniper</a>
+  &nbsp; · &nbsp;
+  <a href="https://pokeidle.io/app">🎮 Abrir o jogo</a>
+</p>
 
-1. No Tampermonkey, atualize o script existente ou instale [autodex.user.js](https://raw.githubusercontent.com/panicguy/Scripts-PIO/main/autodex.user.js).
-2. **Recarregue a página do jogo**, para retirar a versão antiga que continua na memória da aba.
-3. Clique em **AutoDex → Sincronizar → Criar fila → Iniciar**.
-4. **Antes da primeira viagem, esteja no Centro Pokémon.** Se estiver caçando, volte manualmente ao Centro e clique em Iniciar outra vez. Esse bloqueio evita tentar viajar diretamente entre hunts.
+## O que cada script faz
 
-## O que foi corrigido nesta versão
+| Script | Para que serve | Versão |
+| --- | --- | --- |
+| [AutoDex](autodex.user.js) | Organiza os Pokémon que faltam na Pokédex, cria uma fila de caça e agenda o retorno ao Centro Pokémon após detectar uma nova captura. | 0.2.1 |
+| [Auto-Sniper](auto-sniper.user.js) | Reúne regras de compra automática, consultas e operações do mercado, estatísticas de farm, catálogos de hunts e bosses e ferramentas de oferendas em um cockpit dentro do jogo. | 1.5.2.1 |
 
-- **Nomes legíveis:** o DOM usa `.dex-card` com `.pego`, `.visto`, `.desconhecido`; a palavra `???` era realmente exibida pela Pokédex para desconhecidos. O AutoDex resolve nomes usando um **catálogo de 1.247 espécies** exportado pelo jogador, dando prioridade ao nome exibido pelo próprio jogo quando conhecido. Uma espécie adicionada depois desse catálogo pode aparecer como `Pokémon #ID`; não é inventado um nome.
-- **✓ e ×:** estado capturado/pendente direto na lista, exibida somente após **Sincronizar**; filtro, pesquisa e painel mais compacto no estilo do jogo.
-- **Fila:** prioriza espécies `visto` e depois as ainda `desconhecido`. Espécies especiais sem hunt normal identificadas no catálogo são marcadas como pendentes especiais, não como capturadas.
-- **Viajar:** só inicia a hunt partindo do Centro Pokémon; tenta abrir a ficha e clica em `#ficha-corpo .fi-hunts button.fi-hunt[data-hunt]`, confirmando a entrada por `#hud-hunt`.
-- **Captura:** a Pokédex sinaliza **+1** no botão superior da Pokédex quando uma espécie nova é capturada. O script observa aumento em relação ao valor de antes da hunt, **enquanto o HUD corresponde à espécie selecionada**. Também aceita `.dex-card.pego` atualizado.
-- **Retorno:** após detectar a captura, utiliza `#rb-center-schedule` **uma única vez**; se `aria-pressed="true"`, não clica, pois outro clique cancelaria o agendamento. O próprio jogo controla os três segundos sem combate.
-- **Próxima hunt:** o script não libera nova viagem até `#hud-hunt` mostrar `Centro Pokémon`.
-- **Pausa/Retomada:** conserva a posição da fila. Se a hunt não for confirmada, pausa; ao retomar do Centro, tenta a mesma espécie outra vez.
-- A janela AutoDex pode permanecer **fechada** enquanto funciona, mas a aba do jogo precisa continuar aberta.
+## Como instalar
 
-## Teste controlado
+1. Instale o [Tampermonkey](https://www.tampermonkey.net/) no navegador e conclua a configuração indicada pela extensão para permitir userscripts.
+2. Clique em **Instalar AutoDex** ou **Instalar Auto-Sniper** nos links acima. Cada script é instalado separadamente; escolha os que quiser usar.
+3. Na tela do Tampermonkey, confira o nome e clique em **Instalar**. Se o arquivo abrir como texto, confira se a extensão está instalada e habilitada.
+4. Abra o [PokéIdle](https://pokeidle.io/app) e **recarregue a página**. Se o jogo já estava aberto, esse passo também é necessário.
+5. Confira se o script está habilitado no Tampermonkey e abra seu painel dentro do jogo.
 
-1. Instale v0.2.1 e recarregue a página.
-2. Vá ao Centro Pokémon, abra o AutoDex, clique em **Sincronizar** e confira se nomes como Caterpie, Gastly e Ivysaur aparecem, sem `???`.
-3. Clique em **Criar fila → Iniciar** e verifique a hunt escolhida.
-4. Após surgir o aviso **Pokédex +1** (espécie nova), confira se o retorno fica agendado e se a próxima hunt só começa quando o Centro aparecer no HUD.
-5. Se parar ou errar a localização, abra F12 → Console e execute:
+**Para atualizar:** use a verificação de atualizações do Tampermonkey ou abra novamente o link de instalação e confirme a atualização. Depois, recarregue o jogo para carregar a nova versão. Evite manter cópias duplicadas do mesmo script.
+
+## 📖 AutoDex
+
+### Recursos
+
+- Lista de espécies com **✓ capturado / × pendente**, pesquisa e filtros.
+- Nomes de Pokémon resolvidos com apoio de um catálogo de **1.247 espécies**; o estado de captura é lido do jogo.
+- Fila que prioriza espécies já vistas e depois as desconhecidas.
+- Início de hunt a partir do Centro Pokémon e confirmação da localização pelo HUD.
+- Detecção de captura pelo aviso **Pokédex +1** ou pelo card atualizado da Pokédex.
+- Retorno agendado ao Centro após a captura; a próxima viagem aguarda a chegada.
+- Controles para pausar, retomar e parar, preservando a fila.
+
+### Como usar
+
+1. Vá ao **Centro Pokémon**.
+2. Clique em **AutoDex**, ao lado da Pokédex.
+3. Clique em **Sincronizar** e confira a lista.
+4. Clique em **Criar fila → Iniciar**.
+5. Acompanhe a primeira hunt e o primeiro retorno para conferir o comportamento no seu jogo.
+
+O painel pode ficar fechado durante a execução. Espécies especiais sem hunt normal ficam pendentes; elas não são marcadas como capturadas. As opções de captura e as bolas continuam sendo as configuradas no próprio jogo.
+
+**Ao recarregar a página, o AutoDex não retoma a caça automaticamente.** Parar o script não cancela um retorno já agendado no jogo.
+
+## 🎯 Auto-Sniper
+
+Conversão da extensão **Rotom Sniper 1.5.2** em um único userscript, com cockpit integrado à página.
+
+### Recursos
+
+- **Regras de compra:** seleção de item/Pokémon, limites de preço, quantidades e acompanhamento das compras.
+- **Radar global:** filtros para shiny, potência P5 e nota, com tetos de preço por configuração.
+- **Mercado:** consulta de ofertas, anúncios próprios, compras manuais e ferramentas de diamantes.
+- **Farm:** estatísticas e telemetria das hunts recebidas do jogo.
+- **Hunts e bosses:** catálogos, rotas, drops e calculadora de probabilidade de recompensas de bosses.
+- **Oferendas:** consulta de candidatos e ferramentas de execução em lote.
+- **Configurações persistentes:** regras e preferências salvas no armazenamento local do site.
+
+### Como usar
+
+1. Instale e **recarregue o jogo** para que o script capture a conexão desde o carregamento.
+2. Clique em **Auto-Sniper**, no canto inferior direito.
+3. A primeira instalação começa **pausada**. Cadastre suas regras e confira preços, moedas e quantidades antes de ativar **AUTO-SNIPE**.
+4. Use as abas do cockpit para acessar mercado, farm, hunts e oferendas.
+5. Para interromper as compras automáticas, desative **AUTO-SNIPE**. Fechar o painel apenas esconde a interface.
+
+Use uma única aba do jogo e desative a extensão Rotom Sniper original enquanto usa esta conversão. As configurações da extensão não são importadas automaticamente.
+
+## Testes e limitações
+
+| Script | O que foi verificado | O que ainda precisa de validação |
+| --- | --- | --- |
+| AutoDex | Sintaxe JavaScript. | Fluxo completo de caça, captura e retorno em conta autenticada. |
+| Auto-Sniper | Sintaxe e teste em Chrome com página simulada: painel, navegação em hunts, ativação/pausa, envio único do comando e persistência após recarregar, sem erros JavaScript. | Compras, vendas, oferendas e telemetria em sessão real do jogo. |
+
+- Mantenha a aba aberta. A suspensão de abas pelo navegador pode atrasar as automações.
+- Mudanças no layout ou no protocolo do jogo podem exigir ajustes nos scripts.
+- O catálogo do AutoDex possui 1.247 espécies, enquanto a interface observada mostrava 1.248. Espécies posteriores podem aparecer como `Pokémon #ID`.
+- O indicador **Pokédex +1** não informa sozinho o ID capturado; o AutoDex o relaciona à hunt confirmada no HUD e pode pausar diante de inconsistências.
+- Limpar os dados do site apaga configurações salvas. No Auto-Sniper, o armazenamento é compartilhado por origem/navegador e não é separado por personagem ou conta.
+- Os scripts incluem seus próprios módulos, mas imagens e dados atuais continuam dependendo do jogo e das fontes usadas pelo código original.
+
+## Encontrou um problema?
+
+Abra uma [issue](https://github.com/panicguy/Scripts-PIO/issues) com o nome e a versão do script, o que você fez e o que aconteceu. Para obter um diagnóstico, abra o console do navegador (**F12 → Console**) e execute o comando do script correspondente:
 
 ```javascript
 PIOAutoDex.diagnostico()
 ```
 
-Envie a saída para investigar. **Não compartilhe tokens, cookies nem credenciais.**
+```javascript
+PIOAutoSniper.diagnostico()
+```
 
-## Limitações
+Revise a saída antes de compartilhar e remova tokens, cookies ou credenciais.
 
-**A sintaxe foi verificada, mas a v0.2.1 ainda precisa de teste de ponta a ponta numa conta autenticada.** A leitura do catálogo é baseada numa exportação com 1.247 espécies enquanto a interface mostrou 1.248. O indicador `Pokédex +1` informa uma nova espécie, mas não revela o ID dela sozinho; por isso o script relaciona o evento à hunt atual confirmada no HUD, e pode pausar se o jogo mudar o layout. Captura/bolas dependem das opções normais do jogo. Retorno agendado por outro script não é cancelado pelo botão Parar do AutoDex. Ao recarregar a página, o script **não volta a caçar automaticamente**.
+## Créditos
 
-Crédito conceitual: [PIW Auto Pokédex — Luis Ferreira](https://github.com/luishferreira/poke-standalone-scripts/blob/master/auto-pokedex.user.js), criado para outro jogo. O código AutoDex desta versão é próprio.
+- **PIO Scripts by KimJongDudu** — identidade e coleção do repositório.
+- **AutoDex by Dudu** — código próprio desta versão. Referência conceitual: [PIW Auto Pokédex, de Luis Ferreira](https://github.com/luishferreira/poke-standalone-scripts/blob/master/auto-pokedex.user.js), criado para outro jogo.
+- **Auto-Sniper** — conversão da extensão Rotom Sniper 1.5.2, preservando os módulos e créditos presentes no material original.
