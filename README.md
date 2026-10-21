@@ -19,7 +19,7 @@
 
 | Script | Para que serve | Versão |
 | --- | --- | --- |
-| [AutoDex](autodex.user.js) | Completa a Pokédex ou refaz capturas na corrida semanal, com ordem por nível (padrão), número da Dex ou aleatória; agenda o retorno ao Centro após capturar. | 0.2.4 |
+| [AutoDex](autodex.user.js) | Completa a Pokédex ou refaz capturas na corrida semanal, com ordem por nível (padrão), número da Dex ou aleatória; agenda o retorno ao Centro após capturar. | 0.2.5 |
 | [Auto-Sniper](auto-sniper.user.js) | Reúne regras de compra automática, consultas e operações do mercado, estatísticas de farm, catálogos de hunts e bosses e ferramentas de oferendas em um cockpit dentro do jogo. | 1.5.2.1 |
 
 ## Como instalar
@@ -40,7 +40,7 @@
 - Nomes de Pokémon resolvidos com apoio de um catálogo de **1.247 espécies**; o estado de captura é lido do jogo.
 - Dois modos: **Completar Pokédex** (ignora espécies já capturadas) e **Corrida semanal de catch** (inclui novamente as espécies já registradas).
 - Ordenação: **nível da hunt, do menor ao maior (padrão)**, **número da Pokédex** ou **aleatória** (neste momento, aleatória só para Completar Pokédex).
-- A tabela conhecida de níveis cobre **753 hunts**; espécies sem nível identificado ficam no fim da fila. Pokémon de **Outland** entram quando disponíveis na Pokédex.
+- A tabela conhecida de níveis cobre **1.065 hunts**; espécies sem nível identificado ficam no fim da fila. Pokémon de **Outland** entram quando disponíveis na Pokédex.
 - Início de hunt a partir do Centro Pokémon; confirmação pelo **HUD ou Hunt Analyser**, inclusive no modo economia de bateria.
 - Detecção de nova captura pelo aviso **Pokédex +1**, confirmado em relação ao valor antes da hunt; no modo Completar, também pelo card atualizado da Pokédex. Na corrida semanal, verifica adicionalmente o histórico de capturas recente quando disponível.
 - Retorno agendado ao Centro após a captura; a próxima viagem aguarda a chegada.
