@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PIO AutoDex — Dudu
 // @namespace    https://github.com/panicguy/Scripts-PIO
-// @version      0.2.2
+// @version      0.2.3
 // @description  AutoDex: nomes reais, fila de Pokédex, caça e retorno agendado ao Centro Pokémon.
 // @author       Dudu
 // @match        https://pokeidle.io/*
@@ -52,7 +52,10 @@
   // Migra uma fila anterior sem perder a posição já percorrida.
   if (state.queue.length) {
     const previous = state.queue.slice(0, state.index).filter(x => !isExcluded(x.id, x.name));
-    const future = state.queue.slice(state.index).filter(x => !isExcluded(x.id, x.name));
+    const future = state.queue.slice(state.index)
+      .filter(x => !isExcluded(x.id, x.name))
+      .sort((a, b) => Number(a.id) - Number(b.id));
+    // Mantém o trecho já percorrido, mas corrige numericamente todas as próximas hunts.
     state.queue = [...previous, ...future];
     state.index = previous.length;
   }
@@ -471,7 +474,7 @@
     panel.hidden = true;
     panel.innerHTML = [
       '<header><img src="/assets/site/assets/ui/menu-pokedex.png" alt="">',
-      '<span class="ad-brand">AutoDex <span class="ad-version">by Dudu · v0.2.2</span></span>',
+      '<span class="ad-brand">AutoDex <span class="ad-version">by Dudu · v0.2.3</span></span>',
       '<button class="ad-close" type="button" data-ad="close" title="Fechar painel">×</button></header>',
       '<main><div id="pio-ad-status"></div>',
       '<div class="ad-row"><button data-ad="sync">Sincronizar</button>',
@@ -498,14 +501,17 @@
       } else if (action === 'queue') {
         if (!synchronized && !await synchronize()) return;
         if (state.running) { pause('Pare antes de recriar a fila.'); return; }
+        // Ordem estritamente numérica da Pokédex, incluindo entradas de Outland
+        // (ex.: #2001, #2002) quando existirem no DOM real da Pokédex.
+        // Não priorizar "vistos" e não restringir espécies ao catálogo estático.
         state.queue = dex.filter(s => !s.caught && !isExcluded(s.id, s.name))
-          .sort((a,b) => Number(b.seen) - Number(a.seen) || a.id - b.id)
-          .map(({id,name,normalHunt}) => ({id,name,normalHunt}));
+          .sort((a, b) => Number(a.id) - Number(b.id))
+          .map(({id, name, normalHunt}) => ({id, name, normalHunt}));
         state.index = 0; state.captured = []; state.skipped = [];
         state.current = null; state.returnPending = null;
         state.running = false; state.paused = false;
         store(); phase = 'ready';
-        say('Fila com ' + state.queue.length + ' pendentes criada (vistos primeiro).', 'success');
+        say('Fila com ' + state.queue.length + ' pendentes criada em ordem numérica da Pokédex (inclui Outland).', 'success');
       } else if (action === 'run') {
         if (!synchronized) { say('Sincronize a Pokédex antes de iniciar.', 'warning'); return; }
         if (!state.queue.length) { say('Clique em Criar fila antes de iniciar.', 'warning'); return; }
@@ -613,7 +619,7 @@
   window.PIOAutoDex = {
     diagnostico() {
       return {
-        version: '0.2.2',
+        version: '0.2.3',
         synchronized, cards: many('.dex-card').length,
         pegos: many('.dex-card.pego').length,
         badge: captureBadge(), hud: hud(), analyzer: analyzerHunt(),
@@ -622,7 +628,11 @@
         centerScheduled: centerButton()?.getAttribute('aria-pressed'),
         phase, state: {
           running: state.running, paused: state.paused, index: state.index,
-          queue: state.queue.length, current: state.current,
+          queue: state.queue.length, 
+          proximos: state.queue.slice(state.index, state.index + 12).map(item => ({id: item.id, name: item.name})),
+          ordemNumericaRestante: state.queue.slice(state.index).every((item, i, remaining) =>
+            i === 0 || Number(remaining[i - 1].id) <= Number(item.id)),
+          current: state.current,
           returnPending: state.returnPending
         },
         message: notice, recentEvents: sessionEvents.slice(-12)
