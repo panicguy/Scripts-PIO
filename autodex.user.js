@@ -663,17 +663,22 @@
     }
     const filter = el('#pio-ad-filter', panel).value;
     const search = norm(el('#pio-ad-search', panel).value);
+    // "Pendente" no modo semanal inclui espécies já registradas na Dex.
+    const weeklyView = state.modePreference === 'weekly';
+    const completedInView = item => weeklyView
+      ? (state.runMode === 'weekly' && state.queue.length > 0 &&
+          state.captured.includes(item.id))
+      : item.caught;
     const rows = dex.filter(item =>
       !isExcluded(item.id, item.name) &&
-      (filter === 'all' || (filter === 'caught' ? item.caught : !item.caught)) &&
+      (filter === 'all' || (filter === 'caught' ? completedInView(item) : !completedInView(item))) &&
       (!search || norm(item.name).includes(search) || String(item.id).includes(search))
     );
     list.replaceChildren(...rows.slice(0, 250).map(item => {
       const entry = document.createElement('div');
       entry.className = 'ad-species' + (state.current?.id === item.id ? ' active' : '');
       const check = document.createElement('span');
-      const completed = state.runMode === 'weekly' && state.queue.length
-        ? state.captured.includes(item.id) : item.caught;
+      const completed = completedInView(item);
       check.className = 'ad-mark ' + (completed ? 'yes' : 'no');
       check.textContent = completed ? '✓' : '×';
       const name = document.createElement('span');
