@@ -19,7 +19,7 @@
 
 | Script | Para que serve | Versão |
 | --- | --- | --- |
-| [AutoDex](autodex.user.js) | Completa a Pokédex ou refaz capturas na corrida semanal, com ordem por nível (padrão), número da Dex ou aleatória; agenda o retorno ao Centro após capturar. | 0.2.5 |
+| [AutoDex](autodex.user.js) | Completa a Pokédex ou refaz capturas na corrida semanal, com ordem por nível (padrão), número da Dex ou aleatória; agenda o retorno ao Centro após capturar. | 0.2.6 |
 | [Auto-Sniper](auto-sniper.user.js) | Reúne regras de compra automática, consultas e operações do mercado, estatísticas de farm, catálogos de hunts e bosses e ferramentas de oferendas em um cockpit dentro do jogo. | 1.5.2.1 |
 
 ## Como instalar
@@ -37,6 +37,7 @@
 ### Recursos
 
 - Lista de espécies com **✓ capturado / × pendente**, pesquisa e filtros.
+- Limpa automaticamente buscas esquecidas no campo da Pokédex antes de sincronizar ou abrir a próxima ficha, evitando travar a fila.
 - Nomes de Pokémon resolvidos com apoio de um catálogo de **1.247 espécies**; o estado de captura é lido do jogo.
 - Dois modos: **Completar Pokédex** (ignora espécies já capturadas) e **Corrida semanal de catch** (inclui novamente as espécies já registradas).
 - Ordenação: **nível da hunt, do menor ao maior (padrão)**, **número da Pokédex** ou **aleatória** (neste momento, aleatória só para Completar Pokédex).
