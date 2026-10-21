@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PIO AutoDex — Dudu
 // @namespace    https://github.com/panicguy/Scripts-PIO
-// @version      0.2.1
+// @version      0.2.2
 // @description  AutoDex: nomes reais, fila de Pokédex, caça e retorno agendado ao Centro Pokémon.
 // @author       Dudu
 // @match        https://pokeidle.io/*
@@ -15,7 +15,7 @@
   if (window.__PIO_AUTODEX__) return;
   window.__PIO_AUTODEX__ = true;
 
-  const SAVE_KEY = 'pio-autodex-v021';
+  const SAVE_KEY = 'pio-autodex-v021'; // Preserva a fila e o progresso da v0.2.1.
   const el = (query, root = document) => root.querySelector(query);
   const many = (query, root = document) => Array.from(root.querySelectorAll(query));
   const label = node => (node?.textContent || '').replace(/\s+/g, ' ').trim();
@@ -31,6 +31,13 @@
     return [Number(id), { name, normalHunt: normalHunt === '1' }];
   }));
 
+  // Classificação explicitamente marcada como LENDÁRIO / MÍTICO no catálogo
+  // enviado pelo jogador, incluindo formas regionais, Mega e Ultra Beasts.
+  // O nome exibido pelo jogo pode ser "LENDÁRIO ???" ou "MÍTICO ???".
+  const excludedIds = new Set('144,145,146,150,243,244,245,249,250,377,378,379,380,381,382,383,384,480,481,482,483,484,485,486,487,488,638,639,640,641,642,643,644,645,646,716,717,718,785,786,787,788,789,790,791,792,793,794,795,796,797,798,799,800,803,804,805,806,888,889,890,891,892,894,895,896,897,898,1001,1002,1003,1004,1007,1008,1009,1010,1014,1015,1016,1017,1020,1021,1022,1023,1024,3150,9150,3380,3381,3382,3383,3384,3485,3718,5144,5145,5146,8641,8642,8645,8646,8718,9718,8888,8889,8905,151,251,385,386,489,490,491,492,493,494,647,648,649,719,721,801,802,807,808,809,893,1025,3491,3719,3801,3807,8386,9386,11386,8647,8720'.split(',').map(Number));
+  const isExcluded = (id, raw = '') =>
+    excludedIds.has(Number(id)) || /\b(lendario|mitico)\b/.test(norm(raw));
+
   let persisted = {};
   try { persisted = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}') || {}; } catch (_) {}
   const state = Object.assign({
@@ -42,6 +49,13 @@
   if (!Array.isArray(state.queue)) state.queue = [];
   if (!Array.isArray(state.captured)) state.captured = [];
   if (!Array.isArray(state.skipped)) state.skipped = [];
+  // Migra uma fila anterior sem perder a posição já percorrida.
+  if (state.queue.length) {
+    const previous = state.queue.slice(0, state.index).filter(x => !isExcluded(x.id, x.name));
+    const future = state.queue.slice(state.index).filter(x => !isExcluded(x.id, x.name));
+    state.queue = [...previous, ...future];
+    state.index = previous.length;
+  }
   let dex = [];
   let synchronized = false;
   let busy = false;
@@ -79,16 +93,37 @@
   function hud() { return label(el('#hud-hunt')); }
   function isCenter() { return /^centro\s+pok[eé]mon\b|^pok[eé]mon\s+center\b/i.test(hud()); }
   function captureBadge() {
-    const text = norm(label(menuDex()));
-    const match = text.match(/pokedex\s+(\d+)/);
+    const value = norm(label(menuDex()));
+    const match = value.match(/pokedex\s+(\d+)/);
     return match ? Number(match[1]) : 0;
   }
-  function targetAtHud(current) {
-    if (!current) return false;
-    const display = norm(hud().split('·')[0]);
-    return !!display && (display === norm(current.name) ||
-      display === norm(current.slug?.replace(/-/g, ' ')));
+  // O Hunt Analyser permanece disponível no modo economia.
+  // O diagnóstico confirmou: #hunt-analyser e #hunt-analyser-corpo.
+  function analyzerHunt() {
+    const outer = label(el('#hunt-analyser'));
+    const inner = label(el('#hunt-analyser-corpo'));
+    let matched = outer.match(/HUNT\s+ANALYS(?:ER|ER|ISER|IZER)\s+(.{1,70}?)\s+Nv\s*\d+/i);
+    if (!matched) matched = inner.match(/^(.{1,70}?)\s+Nv\s*\d+/i);
+    return matched ? matched[1].trim() : '';
   }
+  function targetEvidence(current) {
+    if (!current || isCenter()) return null;
+    const expected = [norm(current.name), norm((current.slug || '').replace(/-/g, ' '))]
+      .filter(Boolean);
+    const matches = value => {
+      const actual = norm(value);
+      return !!actual && expected.some(name => actual === name ||
+        actual.startsWith(name + ' '));
+    };
+    // Não confundir localização com botões ou textos do log da batalha.
+    const location = hud().split(/[·|]/)[0]
+      .replace(/\s+(?:n[ií]vel|nv)\s*\d+.*$/i, '').trim();
+    if (matches(location)) return 'HUD';
+    // Quando a economia de bateria oculta/abrevia o HUD, usa o analyzer.
+    if (matches(analyzerHunt())) return 'Hunt Analyser';
+    return null;
+  }
+
   function speciesFromCard(card) {
     const content = label(card);
     const found = content.match(/#\s*(\d+)\s*(.*)/);
@@ -96,7 +131,7 @@
     if (!id) return null;
     const mapped = catalog.get(id);
     const rawName = (found?.[2] || '').trim();
-    const shown = rawName && !/^\?+$/.test(rawName) ? rawName : null;
+    const shown = rawName && !/\?/.test(rawName) ? rawName : null;
     const name = shown || mapped?.name || 'Pokémon #' + id;
     return {
       id, name, caught: card.classList.contains('pego'),
@@ -108,7 +143,9 @@
   function readDex() {
     const cards = many('.dex-card');
     if (cards.length < 100) return false;
-    const parsed = cards.map(speciesFromCard).filter(Boolean);
+    const parsed = cards.map(card => ({ card, species: speciesFromCard(card) }))
+      .filter(entry => entry.species && !isExcluded(entry.species.id, label(entry.card)))
+      .map(entry => entry.species);
     if (parsed.length < 100) return false;
     dex = [...new Map(parsed.map(s => [s.id, s])).values()].sort((a, b) => a.id - b.id);
     byId.clear();
@@ -228,6 +265,7 @@
     state.current = {
       id: species.id, name: displayName, slug: go.dataset.hunt,
       started: Date.now(), arrived: 0, badgeBaseline: startBadge,
+      retries: 0, retryStatus: '', lastWarningAt: 0,
       initialCaught: gameCaught(species) === true
     };
     phase = 'traveling';
@@ -235,6 +273,27 @@
     say('Indo para ' + displayName + '… aguardando confirmação da hunt.');
     go.click();
     return 'started';
+  }
+
+  async function retryTravel(active) {
+    // Recuperação segura: só tenta outra viagem quando o HUD confirma o Centro.
+    // Nunca tenta viajar diretamente de uma hunt, mesmo que não reconheça o nome.
+    if (!isCenter() || state.returnPending || active.retries >= 2) return false;
+    active.retries += 1;
+    active.started = Date.now();
+    active.retryStatus = 'Retentativa ' + active.retries + '/2';
+    store();
+    say('Ainda no Centro. Repetindo viagem para ' + active.name +
+      ' (' + active.retryStatus + ').', 'warning');
+    if (!await openSpecies(active)) return false;
+    const buttons = many('#ficha-corpo .fi-hunts button.fi-hunt[data-hunt]');
+    const go = buttons.find(b => b.dataset.hunt === active.slug && !b.disabled);
+    if (!go) {
+      pause('A hunt ' + active.slug + ' não está mais disponível.');
+      return false;
+    }
+    go.click();
+    return true;
   }
 
   async function advance() {
@@ -254,11 +313,10 @@
           store();
           continue;
         }
-        if (species.normalHunt === false) {
-          state.skipped.push(species.id);
-          state.index++;
-          store();
-          continue;
+        // A coluna normalHunt do catálogo não é definitiva: alguns Pokémon
+        // comuns foram marcados incorretamente. A ficha real decide se há hunt.
+        if (isExcluded(species.id, species.name)) {
+          state.index++; store(); continue;
         }
         const outcome = await enterHunt(species);
         if (outcome === 'started' || outcome === 'error') return;
@@ -280,69 +338,82 @@
   async function cycle() {
     if (!state.running || state.paused || busy || polling) return;
     polling = true;
-     try {
+    try {
       if (state.returnPending) {
         if (isCenter()) {
           state.returnPending = null;
           phase = 'center';
           store();
           say('Chegou ao Centro Pokémon. Preparando a próxima hunt.', 'success');
-         } else {
-          const btn = centerButton();
-          if (btn?.getAttribute('aria-pressed') === 'true') {
-            state.returnPending.confirmed = true;
-          }
+          // O próximo tick chamará advance, sem interferir na espera do jogo.
+        } else {
+          const button = centerButton();
+          if (button?.getAttribute('aria-pressed') === 'true') state.returnPending.confirmed = true;
           if (!state.returnPending.confirmed &&
-            Date.now() - state.returnPending.at > 8000) {
-            pause('Agendamento do Centro não foi confirmado; confira o botão.');
-          }
-          if (!state.returnPending.alerted &&
-            Date.now() - state.returnPending.at > 120000) {
+              Date.now() - state.returnPending.at > 8000) {
+            pause('Não foi possível confirmar o agendamento do Centro.');
+          } else if (!state.returnPending.alerted &&
+                     Date.now() - state.returnPending.at > 120000) {
             state.returnPending.alerted = true;
             store();
-            say('Ainda aguardando retorno nativo ao Centro. Nenhuma viagem será feita antes.');
+            say('Aguardando o retorno nativo; nenhuma viagem antecipada.', 'warning');
           }
         }
         return;
       }
-
       const active = state.current;
-      if (!active) { await advance(); return; }
-
-      if (targetAtHud(active)) {
+      if (!active) {
+        await advance();
+        return;
+      }
+      const evidence = targetEvidence(active);
+      if (evidence) {
         active.missingSince = null;
         if (!active.arrived) {
           active.arrived = Date.now();
           phase = 'hunting';
           store();
-          say('Caçando ' + active.name + '. Aguardando Pokédex +1.');
+          say('Caçando ' + active.name + ' (confirmado pelo ' + evidence + ').', 'success');
         }
-        const newBadge = captureBadge();
-        // O menu sinaliza primeira captura da espécie, mesmo com a Pokédex fechada.
-        if (newBadge > active.badgeBaseline) {
-          finishCapture(active, 'Pokédex +' + newBadge);
+        const badge = captureBadge();
+        if (badge > active.badgeBaseline) {
+          finishCapture(active, 'Pokédex +' + badge + ' / ' + evidence);
           return;
         }
         if (gameCaught(active) === true && !active.initialCaught) {
-          finishCapture(active, 'card pego');
+          finishCapture(active, 'Pokédex .pego / ' + evidence);
           return;
         }
-        if (newBadge < active.badgeBaseline) {
-          // A abertura manual da Pokédex pode zerar o indicador.
-          active.badgeBaseline = newBadge;
+        if (badge < active.badgeBaseline) {
+          active.badgeBaseline = badge;
           store();
         }
-      } else if (!active.arrived && Date.now() - active.started > 35000) {
-        pause('Não consegui confirmar a entrada em ' + active.name +
-          '. HUD: ' + (hud() || 'vazio'));
-      } else if (active.arrived) {
-        active.missingSince ||= Date.now();
-        if (Date.now() - active.missingSince > 12000) {
-          pause('A hunt mudou sem confirmação de captura. HUD: ' + (hud() || 'vazio'));
-        }
+        return;
       }
-    } finally { polling = false; }
-   }
+      if (isCenter()) {
+        // Se ainda está no Centro, a viagem não foi confirmada.
+        // Retentar no máximo duas vezes e SEM mudar de espécie.
+        if (Date.now() - active.started > 15000) {
+          if (active.retries < 2) await retryTravel(active);
+          else pause('A viagem para ' + active.name +
+            ' falhou após 2 novas tentativas feitas do Centro Pokémon.');
+        }
+        return;
+      }
+      // Fora do Centro, o jogo pode ter entrado na hunt mesmo sem exibir o
+      // nome no HUD. No modo economia, não existe cena visual para consultar.
+      // Não pausar só por tempo nem tentar outra viagem de uma hunt ativa.
+      if (Date.now() - active.started > 35000 &&
+          Date.now() - (active.lastWarningAt || 0) > 60000) {
+        active.lastWarningAt = Date.now();
+        store();
+        say('Hunt em andamento, mas a localização ainda não foi identificada: ' +
+          active.name + '. Observando HUD/Analyser sem interferir na batalha.', 'warning');
+      }
+    } finally {
+      polling = false;
+    }
+  }
 
   const CSS = [
     '#pio-ad-menu img{height:20px;width:20px;object-fit:contain}',
@@ -400,7 +471,7 @@
     panel.hidden = true;
     panel.innerHTML = [
       '<header><img src="/assets/site/assets/ui/menu-pokedex.png" alt="">',
-      '<span class="ad-brand">AutoDex <span class="ad-version">by Dudu · v0.2.1</span></span>',
+      '<span class="ad-brand">AutoDex <span class="ad-version">by Dudu · v0.2.2</span></span>',
       '<button class="ad-close" type="button" data-ad="close" title="Fechar painel">×</button></header>',
       '<main><div id="pio-ad-status"></div>',
       '<div class="ad-row"><button data-ad="sync">Sincronizar</button>',
@@ -427,7 +498,7 @@
       } else if (action === 'queue') {
         if (!synchronized && !await synchronize()) return;
         if (state.running) { pause('Pare antes de recriar a fila.'); return; }
-        state.queue = dex.filter(s => !s.caught)
+        state.queue = dex.filter(s => !s.caught && !isExcluded(s.id, s.name))
           .sort((a,b) => Number(b.seen) - Number(a.seen) || a.id - b.id)
           .map(({id,name,normalHunt}) => ({id,name,normalHunt}));
         state.index = 0; state.captured = []; state.skipped = [];
@@ -496,6 +567,7 @@
     const filter = el('#pio-ad-filter', panel).value;
     const search = norm(el('#pio-ad-search', panel).value);
     const rows = dex.filter(item =>
+      !isExcluded(item.id, item.name) &&
       (filter === 'all' || (filter === 'caught' ? item.caught : !item.caught)) &&
       (!search || norm(item.name).includes(search) || String(item.id).includes(search))
     );
@@ -541,10 +613,12 @@
   window.PIOAutoDex = {
     diagnostico() {
       return {
-        version: '0.2.1',
+        version: '0.2.2',
         synchronized, cards: many('.dex-card').length,
         pegos: many('.dex-card.pego').length,
-        badge: captureBadge(), hud: hud(),
+        badge: captureBadge(), hud: hud(), analyzer: analyzerHunt(),
+        evidence: targetEvidence(state.current), centroConfirmado: isCenter(),
+        excluidosDoCatalogo: excludedIds.size,
         centerScheduled: centerButton()?.getAttribute('aria-pressed'),
         phase, state: {
           running: state.running, paused: state.paused, index: state.index,
