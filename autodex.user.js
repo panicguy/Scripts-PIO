@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PIO AutoDex — Dudu
 // @namespace    https://github.com/panicguy/Scripts-PIO
-// @version      0.2.5
+// @version      0.2.6
 // @description  AutoDex: nomes reais, fila de Pokédex, caça e retorno agendado ao Centro Pokémon.
 // @author       Dudu
 // @match        https://pokeidle.io/*
@@ -170,13 +170,65 @@
       normalHunt: mapped?.normalHunt ?? null
     };
   }
+
+  // O filtro da Pokédex fica persistido quando a janela fecha. É preciso
+  // liberar a busca ANTES de contar cards ou clicar na espécie seguinte.
+  function dexSearchInput() {
+    const inputs = many('input').filter(input => {
+      if (input.closest('#pio-ad-panel')) return false; // Nunca apagar a busca do AutoDex.
+      const type = (input.getAttribute('type') || 'text').toLowerCase();
+      return type === 'text' || type === 'search';
+    });
+    const scored = inputs.map(input => {
+      const id = String(input.id || '');
+      const attrs = [input.getAttribute('placeholder'), input.getAttribute('aria-label'),
+        input.getAttribute('name'), input.getAttribute('title')].filter(Boolean).join(' ');
+      const context = input.parentElement?.closest(
+        '[id*="pokedex" i],[class*="pokedex" i],[id*="dex" i],[class*="dex-" i]'
+      );
+      let score = 0;
+      if (/pokedex|poked[eé]x|(?:^|[-_])dex(?:$|[-_])/.test(norm(id).replace(/\s/g,'-'))) score += 9;
+      if (/busca|buscar|pesquis|search|procur|filtr/i.test(id)) score += 3;
+      if (/busca|buscar|pesquis|search|procur|filtr/i.test(attrs)) score += 5;
+      if (/pok[eé]mon|pokedex|dex/i.test(attrs)) score += 3;
+      if (context) score += 3;
+      return { input, score, inDex: !!context, description: id || attrs };
+    }).filter(x => x.score >= 5);
+    scored.sort((a,b) => b.score-a.score);
+    return scored[0]?.input || null;
+  }
+  function dexSearchVisible() {
+    const input = dexSearchInput();
+    if (!input) return false;
+    if (input.closest('[hidden]')) return false;
+    return !!(input.getClientRects?.().length || input.offsetParent);
+  }
+  function clearDexSearch() {
+    const input = dexSearchInput();
+    if (!input || !input.value) return false;
+    const previous = input.value;
+    input.value = '';
+    // O jogo atualiza os cards no evento input; change dá compatibilidade extra.
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    log('Busca da Pokédex limpa automaticamente', JSON.stringify({
+      previous, field: input.id || input.getAttribute('placeholder') || '(sem id)'
+    }));
+    return true;
+  }
+  async function restoreDexCards() {
+    const cleared = clearDexSearch();
+    if (cleared) await wait(220); // Aguarda o filtro atualizar o DOM.
+    return cleared;
+  }
+
   function readDex() {
     const cards = many('.dex-card');
-    if (cards.length < 100) return false;
+    if (cards.length < 800) return false; // Nunca sincronizar lista reduzida por filtros.
     const parsed = cards.map(card => ({ card, species: speciesFromCard(card) }))
       .filter(entry => entry.species && !isExcluded(entry.species.id, label(entry.card)))
       .map(entry => entry.species);
-    if (parsed.length < 100) return false;
+    if (parsed.length < 650) return false; // No servidor há 1268 cards.
     dex = [...new Map(parsed.map(s => [s.id, s])).values()].sort((a, b) => a.id - b.id);
     byId.clear();
     for (const card of cards) {
@@ -189,6 +241,9 @@
   }
   async function synchronize() {
     if (busy) return false;
+    // Mesmo que já existam cards na página, a busca pode ter escondido todos
+    // os outros quando o usuário fechou a Pokédex.
+    await restoreDexCards();
     if (readDex()) {
       say('Pokédex sincronizada: ' + dex.length + ' espécies, ' +
         dex.filter(s => s.caught).length + ' capturadas.', 'success');
@@ -196,15 +251,17 @@
     }
     const btn = menuDex();
     if (!btn) { say('Botão da Pokédex não encontrado.', 'error'); return false; }
-    btn.click();
-    for (let attempt = 0; attempt < 20; attempt++) {
-      await wait(300);
+    // Se a janela já está aberta, clicar de novo poderia fechá-la.
+    if (!dexSearchVisible()) btn.click();
+    for (let attempt = 0; attempt < 25; attempt++) {
+      await wait(250);
+      await restoreDexCards();
       if (readDex()) {
-        say('Pokédex carregada. Agora você pode criar a fila.', 'success');
+        say('Pokédex completa carregada, com busca limpa.', 'success');
         return true;
       }
     }
-    say('Não encontrei os cards da Pokédex. Abra a Pokédex e tente novamente.', 'error');
+    say('Pokédex não carregou todos os Pokémon. Verifique filtros de geração, tipo ou vistos.', 'warning');
     return false;
   }
   function cardOf(species) {
@@ -242,8 +299,10 @@
   }
 
   async function openSpecies(species) {
+    // Antes de cada hunt, remove buscas deixadas pelo jogador na Pokédex.
+    await restoreDexCards();
     let card = cardOf(species);
-    if (!card && !readDex()) {
+    if (!card && !await synchronize()) {
       say('Pokédex não está carregada. Sincronize novamente.', 'error');
       return false;
     }
@@ -252,9 +311,13 @@
 
     for (let attempt = 0; attempt < 2; attempt++) {
       if (attempt === 1) {
-        // Em certas versões o jogo só recebe clique do card com a Pokédex aberta.
-        menuDex()?.click();
+        // Se o card não reagiu porque a Pokédex estava fechada,
+        // abra a janela e restaure todos os cards antes de tentar de novo.
+        if (!dexSearchVisible()) menuDex()?.click();
         await wait(250);
+        await restoreDexCards();
+        card = cardOf(species);
+        if (!card) { pause('Card de ' + species.name + ' indisponível após limpar a busca.'); return false; }
       }
       card.click();
       for (let i = 0; i < 16; i++) {
@@ -529,7 +592,7 @@
     panel.hidden = true;
     panel.innerHTML = [
       '<header><img src="/assets/site/assets/ui/menu-pokedex.png" alt="">',
-      '<span class="ad-brand">AutoDex <span class="ad-version">by Dudu · v0.2.5</span></span>',
+      '<span class="ad-brand">AutoDex <span class="ad-version">by Dudu · v0.2.6</span></span>',
       '<button class="ad-close" type="button" data-ad="close" title="Fechar painel">×</button></header>',
       '<main><div id="pio-ad-status"></div>',
       '<div class="ad-row ad-options"><label>Modo <select id="pio-ad-mode">',
@@ -717,10 +780,11 @@
   window.PIOAutoDex = {
     diagnostico() {
       return {
-        version: '0.2.5',
+        version: '0.2.6',
         synchronized, cards: many('.dex-card').length,
         pegos: many('.dex-card.pego').length,
         badge: captureBadge(), hud: hud(), analyzer: analyzerHunt(),
+        pokedexBusca: dexSearchInput()?.value || '', dexCardsVisiveisNoDom: many('.dex-card').length,
         evidence: targetEvidence(state.current), centroConfirmado: isCenter(),
         excluidosDoCatalogo: excludedIds.size,
         centerScheduled: centerButton()?.getAttribute('aria-pressed'),
