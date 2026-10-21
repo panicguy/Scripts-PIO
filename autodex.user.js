@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PIO AutoDex — Dudu
 // @namespace    https://github.com/panicguy/Scripts-PIO
-// @version      0.2.3
+// @version      0.2.4
 // @description  AutoDex: nomes reais, fila de Pokédex, caça e retorno agendado ao Centro Pokémon.
 // @author       Dudu
 // @match        https://pokeidle.io/*
@@ -38,23 +38,50 @@
   const isExcluded = (id, raw = '') =>
     excludedIds.has(Number(id)) || /\b(lendario|mitico)\b/.test(norm(raw));
 
+  // Níveis do "Onde encontrar" registrados na base do jogo.
+  // Quando o nível não é conhecido, a espécie fica após as de nível conhecido.
+  const huntLevels = new Map('1:20,2:40,3:80,4:20,5:40,6:80,7:20,8:40,9:80,10:1,11:10,12:30,13:1,14:10,15:30,16:1,17:20,18:80,19:1,20:30,21:10,22:50,23:10,24:40,25:60,26:80,27:20,28:60,29:10,30:30,31:80,32:10,33:30,34:80,35:40,36:80,37:20,38:100,39:40,40:80,41:10,42:40,43:1,44:30,45:70,46:1,47:50,48:20,49:60,50:10,51:40,52:20,53:50,54:20,55:80,56:10,57:30,58:30,59:100,60:1,61:30,62:80,63:10,64:50,65:100,66:20,67:40,68:80,69:1,70:30,71:60,72:10,73:80,74:1,75:40,76:80,77:20,78:70,79:10,80:60,81:10,82:80,83:50,84:10,85:60,86:20,87:60,88:10,89:80,90:10,91:60,92:20,93:50,94:100,95:60,96:30,97:60,98:10,99:60,100:10,101:40,102:10,103:100,104:20,105:50,106:60,107:60,108:60,109:10,110:60,111:30,112:100,113:60,114:50,115:80,116:10,117:50,118:10,119:50,120:20,121:80,122:80,123:100,124:100,125:100,126:100,127:100,128:60,129:1,130:100,131:100,132:1000,133:40,134:80,135:80,136:80,137:1000,138:20,139:80,140:20,141:80,142:100,143:100,147:30,148:80,149:100,152:20,153:40,154:80,155:20,156:40,157:80,158:20,159:40,160:80,161:10,162:40,163:20,164:60,165:10,166:40,167:10,168:40,169:80,170:10,171:80,172:20,173:20,174:20,175:1,176:80,177:30,178:80,179:20,180:40,181:80,182:50,183:20,184:60,185:1000,186:70,187:1,188:30,189:50,190:40,191:1,192:30,193:50,194:20,195:60,196:80,197:80,198:1000,199:1000,200:100,202:100,203:80,204:10,205:80,206:30,207:40,208:100,209:30,210:80,211:50,212:100,213:40,214:100,215:50,216:30,217:100,218:10,219:100,220:10,221:80,222:50,223:10,224:70,225:40,226:100,227:100,228:20,229:80,230:100,231:20,232:80,233:1125,234:50,235:30,236:30,237:60,238:30,239:30,240:30,241:80,242:1125,246:30,247:60,248:100,252:500,253:650,254:850,255:500,256:650,257:850,258:500,259:650,260:850,261:500,262:700,263:500,264:650,265:500,266:650,267:850,268:500,269:700,270:500,271:650,272:850,273:500,274:650,275:850,276:500,277:700,278:500,279:700,280:500,281:650,282:850,283:500,284:700,285:500,286:700,287:500,288:700,289:600,290:500,291:700,292:500,293:500,294:650,295:850,296:550,297:700,298:500,299:500,301:700,302:600,303:600,304:500,305:650,306:850,307:500,308:700,309:500,310:700,311:550,312:550,313:550,314:550,315:650,316:500,317:700,318:500,319:700,320:500,321:700,322:500,323:700,324:600,325:500,326:700,327:500,328:500,329:650,330:850,331:500,332:700,333:500,334:700,335:600,336:600,337:550,338:550,339:500,340:700,341:500,342:700,343:500,344:700,345:500,346:700,347:500,348:700,349:500,350:700,351:550,352:550,353:500,354:700,355:500,356:650,357:600,358:700,359:600,360:500,361:500,362:700,363:500,364:650,365:850,366:500,367:700,368:550,369:550,370:500,371:500,372:700,373:850,374:500,375:650,376:850,387:1000,388:1750,389:3500,390:1000,391:1750,392:3500,393:1000,394:1750,395:3500,396:1000,397:1750,398:3500,399:1000,400:2000,401:1000,402:2000,403:1000,404:1750,405:3500,406:1000,407:3500,408:1000,409:2000,410:1000,411:3000,412:1000,413:2000,414:1250,415:1000,416:3000,417:1500,418:1000,419:2000,420:1000,421:2000,422:1000,423:2000,424:1250,425:1000,426:2000,427:1000,428:3000,429:1250,430:1500,431:1000,432:2000,433:1000,434:1000,435:2000,436:1000,437:2000,439:1000,441:1250,442:1250,443:1000,444:1750,445:3500,446:1000,447:1000,448:2000,449:1000,450:2000,451:1000,452:2000,453:1000,454:2000,455:1250,456:1000,457:2000,458:1000,459:1000,460:2000,461:1500,462:1500,463:1500,464:3000,465:3000,466:3000,467:3000,468:1500,469:1500,470:1500,471:1500,472:1500,473:1500,474:1500,475:1500,476:2000,477:3000,478:1250,479:1250,495:5000,496:6400,497:8600,498:5000,499:6400,500:8600,501:5000,502:6400,503:8600,504:5000,505:6950,506:5000,508:8600,510:6950,511:5000,512:6950,513:5000,514:6950,515:5000,516:6950,517:5000,518:6950,519:5000,520:6400,521:8600,522:5000,523:6950,524:5000,525:6400,526:8600,527:5000,528:6950,530:6950,531:5400,532:5000,533:6400,534:8600,535:5000,536:6400,537:8600,538:5000,539:5000,540:5000,541:6400,542:8600,543:5000,544:6400,545:8600,546:5000,547:6950,548:5000,549:6950,551:5000,552:6400,553:8600,554:5000,556:5400,557:5000,558:6950,560:6950,561:5400,562:5000,563:6950,564:5000,565:6950,566:5000,567:8000,568:5000,569:6950,570:5000,571:6950,572:5000,573:6950,574:5000,575:6400,576:8600,577:5000,578:6400,579:8600,580:5000,581:6950,582:5000,584:8600,585:5000,586:6950,587:5400,588:5000,589:6950,590:5000,591:6950,592:5000,593:6950,595:5000,596:6950,598:6950,599:5000,601:8600,602:5000,603:6400,604:8600,605:5000,607:5000,608:6400,609:8600,610:5000,611:6400,612:8600,613:5000,614:6950,615:5900,616:5000,617:6950,618:5400,619:5000,620:6950,621:5400,622:5000,623:6950,624:5000,625:6400,626:5400,627:5000,628:6950,629:5000,630:6950,631:5400,633:5000,634:6400,635:8600,636:5000,637:6950,652:21200,655:21200,658:21200,659:10000,660:16000,661:10000,662:14350,663:21200,664:10000,665:14350,666:21200,667:10000,668:16000,669:10000,670:14350,671:21200,674:10000,675:20000,677:10000,679:10000,680:14350,681:16000,683:16000,684:10000,685:16000,686:10000,687:16000,688:10000,689:16000,690:10000,691:20000,692:10000,693:16000,694:10000,695:16000,696:10000,698:10000,699:16000,700:12750,701:12750,702:11250,703:12750,704:10000,705:14350,706:21200,707:11250,708:10000,709:16000,712:10000,713:16000,714:10000,715:16000,723:32000,725:25000,726:32000,727:43100,728:25000,729:32000,730:43100,731:25000,732:32000,733:43100,734:25000,735:34650,736:25000,737:32000,738:43100,742:25000,743:34650,744:25000,747:25000,748:34650,749:25000,750:34650,751:25000,752:34650,755:25000,756:34650,757:25000,758:34650,759:25000,760:34650,761:25000,762:32000,763:43100,766:27050,767:25000,768:34650,777:27050,778:27050,779:27050,780:27050,781:29450,782:25000,783:32000,784:43100,813:50000,814:64000,815:86150,868:50000,869:69300,885:50000,901:58900,935:100000,936:132200,957:100000,958:123350,959:160300,979:114800,989:114800,2001:150,2002:150,2003:150,2004:150,2005:150,2006:150,2007:150,2008:150,2009:150,2010:150,2011:150,2012:150,2013:150,2014:150,2015:150,2016:150,2017:150,2018:150,2019:150,2020:150,2021:150,2022:150,2023:150,2024:150,2025:150,2026:150,2027:150,2028:150,2029:150,2030:150,2031:150,2032:150,2033:150,2034:150,2035:150,2036:150,2037:150,2038:150,2039:150,2040:150,2041:150,2042:150,2043:150,2044:150,2045:150,2046:150,2047:150,2048:150,2049:150,2050:150,2051:150,2052:150,2053:150,2054:150,2055:150,2056:150,2057:150,2058:150'.split(',').map(s => {
+    const [id,level] = s.split(':').map(Number);
+    return [id,level];
+  }));
+  const validMode = mode => mode === 'weekly' ? 'weekly' : 'dex';
+  const validOrder = order => ['level','dex','random'].includes(order) ? order : 'level';
+  function sortQueue(rows, order) {
+    const copy = [...rows];
+    if (order === 'random') {
+      // Embaralha uma única vez ao criar a fila. Salva a ordem resultante.
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i],copy[j]] = [copy[j],copy[i]];
+      }
+    } else if (order === 'level') {
+      copy.sort((a,b) => (huntLevels.get(a.id) ?? Infinity) -
+        (huntLevels.get(b.id) ?? Infinity) || a.id-b.id);
+    } else copy.sort((a,b) => a.id-b.id);
+    return copy;
+  }
+
   let persisted = {};
   try { persisted = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}') || {}; } catch (_) {}
   const state = Object.assign({
     queue: [], index: 0, captured: [], skipped: [], current: null,
-    returnPending: null, running: false, paused: false
+    returnPending: null, running: false, paused: false,
+    modePreference: 'dex', orderPreference: 'level', runMode: 'dex', runOrder: 'level'
   }, persisted, {
     running: false, paused: false, current: null, returnPending: null
   });
   if (!Array.isArray(state.queue)) state.queue = [];
   if (!Array.isArray(state.captured)) state.captured = [];
   if (!Array.isArray(state.skipped)) state.skipped = [];
+  state.modePreference = validMode(state.modePreference);
+  state.orderPreference = validOrder(state.orderPreference);
+  state.runMode = validMode(state.runMode);
+  state.runOrder = validOrder(state.runOrder);
   // Migra uma fila anterior sem perder a posição já percorrida.
   if (state.queue.length) {
     const previous = state.queue.slice(0, state.index).filter(x => !isExcluded(x.id, x.name));
     const future = state.queue.slice(state.index)
-      .filter(x => !isExcluded(x.id, x.name))
-      .sort((a, b) => Number(a.id) - Number(b.id));
+      .filter(x => !isExcluded(x.id, x.name));
     // Mantém o trecho já percorrido, mas corrige numericamente todas as próximas hunts.
     state.queue = [...previous, ...future];
     state.index = previous.length;
@@ -191,6 +218,23 @@
     const card = cardOf(species);
     return card ? card.classList.contains('pego') : null;
   }
+  // Ao contrário da Pokédex, o histórico pode registrar capturas repetidas.
+  // Só usa entradas posteriores ao início da hunt e da própria espécie.
+  // Se o histórico não estiver montado, nunca presume que houve captura.
+  function recentHistoryCapture(active) {
+    if (!active?.arrived) return null;
+    const earliest = Math.max(active.started || 0, active.arrived || 0) - 1500;
+    for (const row of many('.capturas-linha[data-k]')) {
+      const key = row.dataset.k || '';
+      const timestamp = Number(key.split(':')[0]);
+      if (!Number.isFinite(timestamp) || timestamp < earliest || timestamp > Date.now() + 5000) continue;
+      const name = label(el('.cap-nome', row));
+      if (!name) continue;
+      if (norm(name) === norm(active.name)) return { key, name, timestamp };
+    }
+    return null;
+  }
+
   function updateCaptured(species) {
     const record = dex.find(item => item.id === species.id);
     if (record) record.caught = true;
@@ -311,7 +355,8 @@
       while (state.running && !state.paused && !state.current && !state.returnPending &&
         state.index < state.queue.length && examined++ < 12) {
         const species = state.queue[state.index];
-        if (gameCaught(species) === true || state.captured.includes(species.id)) {
+        if ((state.runMode !== 'weekly' && gameCaught(species) === true) ||
+            state.captured.includes(species.id)) {
           state.index++;
           store();
           continue;
@@ -379,11 +424,19 @@
           say('Caçando ' + active.name + ' (confirmado pelo ' + evidence + ').', 'success');
         }
         const badge = captureBadge();
+        // O reset semanal do +1 ainda precisa ser confirmado em sessão real.
+        // Aceita apenas AUMENTO posterior à entrada na hunt, nunca +1 antigo.
         if (badge > active.badgeBaseline) {
           finishCapture(active, 'Pokédex +' + badge + ' / ' + evidence);
           return;
         }
-        if (gameCaught(active) === true && !active.initialCaught) {
+        if (state.runMode === 'weekly') {
+          const history = recentHistoryCapture(active);
+          if (history) {
+            finishCapture(active, 'Histórico de captura ' + history.key + ' / ' + evidence);
+            return;
+          }
+        } else if (gameCaught(active) === true && !active.initialCaught) {
           finishCapture(active, 'Pokédex .pego / ' + evidence);
           return;
         }
@@ -436,6 +489,8 @@
     '#pio-ad-panel button:disabled{opacity:.45;cursor:not-allowed}',
     '#pio-ad-panel button[data-ad="run"]{background:linear-gradient(#426d47,#28462f);border-color:#7ca76d}',
     '#pio-ad-panel .ad-row{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin:9px 0}',
+    '#pio-ad-panel .ad-options label{display:flex;flex:1;flex-direction:column;gap:3px;font-size:11px;color:#d5b88c;min-width:135px}',
+    '#pio-ad-panel .ad-options select{width:100%;padding:7px 4px}',
     '#pio-ad-panel #pio-ad-status{min-height:35px;padding:7px 9px;background:#1a1415a8;border:1px solid #715036;border-radius:5px;color:#edd3a9}',
     '#pio-ad-panel #pio-ad-status[data-kind="success"]{color:#aee4a7}',
     '#pio-ad-panel #pio-ad-status[data-kind="warning"],#pio-ad-panel #pio-ad-status[data-kind="error"]{color:#ffcf8f}',
@@ -474,9 +529,16 @@
     panel.hidden = true;
     panel.innerHTML = [
       '<header><img src="/assets/site/assets/ui/menu-pokedex.png" alt="">',
-      '<span class="ad-brand">AutoDex <span class="ad-version">by Dudu · v0.2.3</span></span>',
+      '<span class="ad-brand">AutoDex <span class="ad-version">by Dudu · v0.2.4</span></span>',
       '<button class="ad-close" type="button" data-ad="close" title="Fechar painel">×</button></header>',
       '<main><div id="pio-ad-status"></div>',
+      '<div class="ad-row ad-options"><label>Modo <select id="pio-ad-mode">',
+      '<option value="dex">Completar Pokédex</option>',
+      '<option value="weekly">Corrida semanal de catch</option></select></label>',
+      '<label>Ordem <select id="pio-ad-order">',
+      '<option value="level">Nível da hunt (menor primeiro)</option>',
+      '<option value="dex">Número da Pokédex</option>',
+      '<option value="random">Aleatório</option></select></label></div>',
       '<div class="ad-row"><button data-ad="sync">Sincronizar</button>',
       '<button data-ad="queue">Criar fila</button>',
       '<button data-ad="run">Iniciar</button>',
@@ -504,14 +566,24 @@
         // Ordem estritamente numérica da Pokédex, incluindo entradas de Outland
         // (ex.: #2001, #2002) quando existirem no DOM real da Pokédex.
         // Não priorizar "vistos" e não restringir espécies ao catálogo estático.
-        state.queue = dex.filter(s => !s.caught && !isExcluded(s.id, s.name))
-          .sort((a, b) => Number(a.id) - Number(b.id))
-          .map(({id, name, normalHunt}) => ({id, name, normalHunt}));
+        const mode = validMode(el('#pio-ad-mode', panel).value);
+        const order = validOrder(el('#pio-ad-order', panel).value);
+        state.modePreference = mode;
+        state.orderPreference = order;
+        state.runMode = mode;
+        state.runOrder = order;
+        state.queue = sortQueue(
+          dex.filter(s => (mode === 'weekly' || !s.caught) && !isExcluded(s.id, s.name))
+            .map(({id, name, normalHunt}) => ({id, name, normalHunt})),
+          order
+        );
         state.index = 0; state.captured = []; state.skipped = [];
         state.current = null; state.returnPending = null;
         state.running = false; state.paused = false;
         store(); phase = 'ready';
-        say('Fila com ' + state.queue.length + ' pendentes criada em ordem numérica da Pokédex (inclui Outland).', 'success');
+        say('Fila ' + (mode === 'weekly' ? 'semanal (inclui já capturados)' : 'da Dex (somente pendentes)') +
+          ': ' + state.queue.length + ' espécies, ordem ' +
+          ({level:'por nível',dex:'da Pokédex',random:'aleatória'})[order] + '.', 'success');
       } else if (action === 'run') {
         if (!synchronized) { say('Sincronize a Pokédex antes de iniciar.', 'warning'); return; }
         if (!state.queue.length) { say('Clique em Criar fila antes de iniciar.', 'warning'); return; }
@@ -544,6 +616,22 @@
       }
       render();
     });
+    const modeSelector = el('#pio-ad-mode', panel);
+    const orderSelector = el('#pio-ad-order', panel);
+    modeSelector.value = state.modePreference;
+    orderSelector.value = state.orderPreference;
+    function changedOptions() {
+      const mode = validMode(modeSelector.value);
+      if (mode === 'weekly' && orderSelector.value === 'random') orderSelector.value = 'level';
+      el('option[value="random"]', orderSelector).disabled = mode === 'weekly';
+      state.modePreference = mode;
+      state.orderPreference = validOrder(orderSelector.value);
+      store();
+      render();
+    }
+    modeSelector.addEventListener('change', changedOptions);
+    orderSelector.addEventListener('change', changedOptions);
+    changedOptions();
     el('#pio-ad-filter', panel).addEventListener('change', render);
     el('#pio-ad-search', panel).addEventListener('input', render);
     render();
@@ -556,11 +644,14 @@
     status.dataset.kind = noticeKind;
     const btn = el('[data-ad="pause"]', panel);
     btn.textContent = state.paused ? 'Retomar' : 'Pausar';
+    el('#pio-ad-mode', panel).disabled = state.running;
+    el('#pio-ad-order', panel).disabled = state.running;
     el('#pio-ad-counts', panel).textContent = synchronized
       ? (dex.filter(s => s.caught).length + ' ✓ / ' + dex.length + ' espécies')
       : 'Pokédex não sincronizada';
     el('#pio-ad-progress', panel).textContent = state.queue.length
-      ? ('Fila: ' + state.index + '/' + state.queue.length) : '';
+      ? ((state.runMode === 'weekly' ? 'Semana' : 'Fila') +
+        ': ' + state.index + '/' + state.queue.length) : '';
     const list = el('#pio-ad-list', panel);
     if (!synchronized) {
       list.replaceChildren();
@@ -581,8 +672,10 @@
       const entry = document.createElement('div');
       entry.className = 'ad-species' + (state.current?.id === item.id ? ' active' : '');
       const check = document.createElement('span');
-      check.className = 'ad-mark ' + (item.caught ? 'yes' : 'no');
-      check.textContent = item.caught ? '✓' : '×';
+      const completed = state.runMode === 'weekly' && state.queue.length
+        ? state.captured.includes(item.id) : item.caught;
+      check.className = 'ad-mark ' + (completed ? 'yes' : 'no');
+      check.textContent = completed ? '✓' : '×';
       const name = document.createElement('span');
       name.className = 'ad-name';
       name.textContent = item.name;
@@ -619,13 +712,16 @@
   window.PIOAutoDex = {
     diagnostico() {
       return {
-        version: '0.2.3',
+        version: '0.2.4',
         synchronized, cards: many('.dex-card').length,
         pegos: many('.dex-card.pego').length,
         badge: captureBadge(), hud: hud(), analyzer: analyzerHunt(),
         evidence: targetEvidence(state.current), centroConfirmado: isCenter(),
         excluidosDoCatalogo: excludedIds.size,
         centerScheduled: centerButton()?.getAttribute('aria-pressed'),
+        mode: state.runMode, order: state.runOrder,
+        preferences: {mode:state.modePreference, order:state.orderPreference},
+        knownHuntLevels: huntLevels.size,
         phase, state: {
           running: state.running, paused: state.paused, index: state.index,
           queue: state.queue.length, 
