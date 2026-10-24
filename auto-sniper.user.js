@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto-Sniper
 // @namespace    https://github.com/panicguy/Scripts-PIO
-// @version      1.5.2.1
+// @version      1.5.2.2
 // @description  Sniper, mercado, farm, hunts, bosses e oferendas. Conversão da extensão 1.5.2.
 // @author       Dudu (conversão); autores da extensão original (motor e cockpit)
 // @match        https://pokeidle.io/*
@@ -1551,6 +1551,13 @@ if (typeof window !== 'undefined') {
       return;
     }
     if (sniperState.confirmedOffers[offerId]) return;
+    const pendingRun = offerRuns[offerId];
+    if (pendingRun && pendingRun.terminal) return;
+    if (pendingRun && pendingRun.releaseAt && agoraDoServidor() + 25 < pendingRun.releaseAt) return;
+    if (pendingRun && pendingRun.itemId && Date.now() - pendingRun.lastSeenAt > 10000) {
+      finishOffer(offerId, 'NAO_VERIFICADO', 'Sem validação recente da oferta no mercado (10s)');
+      return;
+    }
 
     // VALIDAÇÃO FINAL ESTREITA CONTRA GASTO INDEVIDO DE GEMAS:
     const mClean = String(moeda || 'gold').toLowerCase();
@@ -1636,7 +1643,6 @@ if (typeof window !== 'undefined') {
       }
     }
 
-    sniperState.boughtOffers[offerId] = Date.now();
     sniperState.lastBuyAttempt = {
       offerId: offerId,
       targetName: targetName,
@@ -1656,6 +1662,11 @@ if (typeof window !== 'undefined') {
     const sent = sendRaw(payload);
 
     if (sent) {
+      sniperState.boughtOffers[offerId] = Date.now();
+      const run = offerRuns[offerId] || createOfferRun(offerId, {
+        targetName, seller, price: preco, qty: buyQty, currency: moeda, ruleId, ruleDesc
+      });
+      run.lastSentAt = Date.now();
       if (!isRetry) {
         // Otimização Preventiva de Saldo: decrementa preventivamente para evitar estouro em compras simultâneas apenas no primeiro disparo
         const mClean = String(moeda || 'gold').toLowerCase();
@@ -1691,14 +1702,14 @@ if (typeof window !== 'undefined') {
           details: ruleDesc || 'Ordem enviada'
         };
 
-        emitSniperLog(logEntry);
-        if (ruleId) {
-          emitSniperBought(ruleId, offerId, buyQty);
-        }
+        updateOfferStatus(run, 'DISPARADO',
+          (ruleDesc || 'Ordem enviada') + ' · Aguardando confirmação do servidor');
+        // Quantidade da regra só aumenta quando o servidor confirma a compra.
       } else {
         console.log(`[Rotom Sniper]: 🔁 Ordem de reforço #${offerId} enviada ao servidor dentro da janela de 3s.`);
       }
     } else {
+      finishOffer(offerId, 'ERRO_ENVIO', 'WebSocket desconectado: compra não enviada');
       showRotomHudToast(
         'ERRO AO DISPARAR',
         `Não foi possível enviar a ordem de compra para #${offerId}. WebSocket desconectado.`,
@@ -2341,20 +2352,26 @@ if (typeof window !== 'undefined') {
         const evKey = String(e.k || e.t || '');
 
         if (evKey === 'marketComprado') {
-          const desc = e.descricao || 'Item entregue na mochila/depot!';
-          if (sniperState.lastBuyAttempt && sniperState.lastBuyAttempt.offerId) {
-            const offId = sniperState.lastBuyAttempt.offerId;
-            sniperState.confirmedOffers[offId] = true;
-            clearOfferTimers(offId);
+          const desc = e.descricao || 'Compra comunicada pelo servidor';
+          const explicitId = Number(e.anuncioId || e.ofertaId || e.offerId || e.marketOfferId || 0);
+          const recent = recentSentOffers();
+          const run = explicitId
+            ? recent.find(r => r.offerId === explicitId)
+            : (recent.length === 1 ? recent[0] : null);
+          if (run) {
+            sniperState.confirmedOffers[run.offerId] = true;
+            finishOffer(run.offerId, 'COMPRADO', `Servidor confirmou a compra: ${desc}`);
+            if (run.ruleId) emitSniperBought(run.ruleId, run.offerId, run.qty);
+            showRotomHudToast('COMPRA CONFIRMADA!', desc, 'confirmed');
+          } else {
+            // Sem ID e com tentativas concorrentes: não atribuir arbitrariamente ao último.
+            emitSniperLog({
+              id: 'log_' + Date.now() + '_compra_sem_id',
+              timestamp: Date.now(), targetName: desc, status: 'COMPRA_SEM_ID',
+              details: 'Servidor informou compra, mas não identificou qual anúncio'
+            });
+            showRotomHudToast('COMPRA SEM OFERTA IDENTIFICADA', desc, 'warning');
           }
-          showRotomHudToast('COMPRA CONFIRMADA!', desc, 'confirmed');
-          emitSniperLog({
-            id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-            timestamp: Date.now(),
-            targetName: desc,
-            status: 'CONFIRMADO',
-            details: `✅ Confirmado pelo servidor: ${desc}`
-          });
         }
 
         // Se ainda não temos slug de hunt ativa, inferir pelo monstro
@@ -2633,20 +2650,18 @@ if (typeof window !== 'undefined') {
       const errMsg = packet.msg || packet.chave || 'Operação recusada pelo servidor';
       if (errMsg.includes('Devagar')) {
         showRotomHudToast('AVISO ANTI-FLOOD', 'O servidor pediu para desacelerar as mensagens.', 'warning');
-      } else if (sniperState.lastBuyAttempt && (Date.now() - sniperState.lastBuyAttempt.timestamp < 12000)) {
-        // Se houve uma tentativa de compra recente, reportar a recusa exata
-        const last = sniperState.lastBuyAttempt;
-        delete sniperState.boughtOffers[last.offerId];
-        delete sniperState.confirmedOffers[last.offerId];
-        showRotomHudToast('COMPRA RECUSADA', `${last.targetName}: ${errMsg}`, 'error');
-        emitSniperLog({
-          id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-          timestamp: Date.now(),
-          targetName: last.targetName,
-          offerId: last.offerId,
-          status: 'RECUSADO',
-          details: `❌ Recusado pelo servidor: ${errMsg}`
-        });
+      } else {
+        const explicitId = Number(packet.anuncioId || packet.ofertaId || packet.offerId || 0);
+        const recent = recentSentOffers(12000);
+        const purchaseError = /an[uú]ncio|mercado|compr|oferta|sorteio|saldo|pre[cç]o|retido|estoque|dispon[ií]vel/i.test(String(errMsg));
+        const run = explicitId
+          ? recent.find(r => r.offerId === explicitId)
+          : (purchaseError && recent.length === 1 ? recent[0] : null);
+        if (run) {
+          delete sniperState.boughtOffers[run.offerId];
+          finishOffer(run.offerId, 'RECUSADO', `Recusado pelo servidor: ${errMsg}`);
+          showRotomHudToast('COMPRA RECUSADA', `${run.targetName}: ${errMsg}`, 'error');
+        }
       }
     }
   }
@@ -2751,8 +2766,9 @@ if (typeof window !== 'undefined') {
       if (sniperState.enabled === newEnabled) return; // Deduplicação: não repete se já estiver no mesmo estado
       sniperState.enabled = newEnabled;
       if (!sniperState.enabled) {
-        // Cancela todos os disparos agendados e limpa a fila
-        Object.keys(sniperState.scheduledOffers).forEach(clearOfferTimers);
+        // Cancela os timers e atualiza o log da mesma oferta.
+        Object.keys(sniperState.scheduledOffers).forEach(id =>
+          finishOffer(id, 'CANCELADO', 'Auto-Sniper pausado pelo usuário'));
         sniperState.scheduledOffers = {};
       }
       showRotomHudToast(
@@ -2763,11 +2779,16 @@ if (typeof window !== 'undefined') {
     } else if (event.data.type === 'UPDATE_SNIPER_RULES') {
       sniperState.rules = Array.isArray(event.data.rules) ? event.data.rules : [];
       // Se não há regras ativas de itens, limpa agendamentos
-      const activeRuleIds = new Set(sniperState.rules.filter(r => r.active).map(r => r.id));
-      if (activeRuleIds.size === 0 && !sniperState.globalConfig.snipeAnyShiny && !sniperState.globalConfig.snipeAnyP5 && !sniperState.globalConfig.snipeByNote) {
-        Object.keys(sniperState.scheduledOffers).forEach(clearOfferTimers);
-        sniperState.scheduledOffers = {};
-      }
+      const activeRuleIds = new Set(sniperState.rules.filter(r => r.active).map(r => String(r.id)));
+      Object.keys(sniperState.scheduledOffers).forEach(id => {
+        const run = offerRuns[id];
+        if (run && run.ruleId && !activeRuleIds.has(String(run.ruleId))) {
+          finishOffer(id, 'CANCELADO', 'Regra de compra desativada');
+        } else if (!activeRuleIds.size && !sniperState.globalConfig.snipeAnyShiny &&
+                   !sniperState.globalConfig.snipeAnyP5 && !sniperState.globalConfig.snipeByNote) {
+          finishOffer(id, 'CANCELADO', 'Sem regras de compra ativas');
+        }
+      });
       console.log('[Rotom Sniper]: Regras atualizadas:', sniperState.rules.length);
     } else if (event.data.type === 'UPDATE_SNIPER_CONFIG') {
       if (event.data.config) {
