@@ -476,7 +476,9 @@ if (typeof window !== 'undefined') {
       if (event.data.type === 'SNIPER_LOG') {
         safeStorageGet(['rotom_sniper_logs'], (res) => {
           const logs = res.rotom_sniper_logs || [];
-          const updatedLogs = [event.data.log, ...logs].slice(0, 100);
+          // Atualiza o mesmo registro pelo ID da oferta, mantendo o histórico legível.
+          const entry = event.data.log;
+          const updatedLogs = [entry, ...logs.filter(l => l.id !== entry.id)].slice(0, 100);
           safeStorageSet({ rotom_sniper_logs: updatedLogs });
         });
       } else if (event.data.type === 'SNIPER_BOUGHT') {
@@ -1104,6 +1106,76 @@ if (typeof window !== 'undefined') {
         : [sniperState.scheduledOffers[offerId]];
       timers.forEach(t => clearTimeout(t));
       delete sniperState.scheduledOffers[offerId];
+    }
+  }
+
+  // Controle por anúncio. Não deduz sucesso/fracasso pelo último disparo global.
+  const offerRuns = Object.create(null);
+  const normCurrency = value => {
+    const v = String(value || '').toLowerCase();
+    return ['orb','orbs','gemas','gema','gems','pontos'].includes(v) ? 'orb'
+      : ['gold','coins','coin'].includes(v) ? 'gold' : v;
+  };
+  function createOfferRun(offerId, data) {
+    if (offerRuns[offerId]) return offerRuns[offerId];
+    return (offerRuns[offerId] = {
+      offerId: Number(offerId),
+      logId: 'sniper_offer_' + offerId + '_' + Date.now(),
+      targetName: data.targetName || 'Item', seller: data.seller || '',
+      price: Number(data.price) || 0, qty: Number(data.qty) || 1,
+      currency: data.currency || 'gold', itemId: Number(data.itemId) || 0,
+      ruleId: data.ruleId || '', ruleDesc: data.ruleDesc || '',
+      releaseAt: Number(data.releaseAt) || 0,
+      lastSeenAt: Date.now(), lastSentAt: 0, misses: 0,
+      status: 'AGENDADO', terminal: false, finishedAt: 0
+    });
+  }
+  function updateOfferStatus(run, status, details) {
+    if (!run) return;
+    run.status = status;
+    emitSniperLog({
+      id: run.logId, timestamp: Date.now(), targetName: run.targetName,
+      seller: run.seller, offerId: run.offerId, price: run.price, qty: run.qty,
+      currency: run.currency, status, details: details || run.ruleDesc
+    });
+  }
+  function finishOffer(offerId, status, details) {
+    const run = offerRuns[offerId];
+    if (!run || run.terminal) return false;
+    run.terminal = true;
+    run.finishedAt = Date.now();
+    clearOfferTimers(offerId);
+    updateOfferStatus(run, status, details);
+    return true;
+  }
+  function recentSentOffers(maxAgeMs = 8000) {
+    return Object.values(offerRuns).filter(run =>
+      !run.terminal && run.status === 'DISPARADO' &&
+      run.lastSentAt && Date.now() - run.lastSentAt <= maxAgeMs);
+  }
+  function reviewItemSnapshot(itemId, moeda, rows, packet) {
+    // Resposta do item/moeda específicos, não resumo nem listagem paginada.
+    if (!itemId || !packet || !packet.moeda || !Array.isArray(rows)) return;
+    const partial = Number(packet.pagina || 0) > 0 ||
+      Boolean(packet.hasMore || packet.temMais || packet.proximaPagina) ||
+      Number(packet.totalPaginas || 1) > 1 ||
+      (packet.total !== undefined && Number(packet.total) > rows.length);
+    for (const run of Object.values(offerRuns)) {
+      if (run.terminal || run.status !== 'AGENDADO' ||
+          run.itemId !== itemId || normCurrency(run.currency) !== normCurrency(moeda)) continue;
+      const found = rows.find(row => row && Number(row.id) === run.offerId);
+      if (found) {
+        if ((found.estado && found.estado !== 'aberto') || found.comprador ||
+            (Number(found.preco) > 0 && Number(found.preco) !== run.price) ||
+            (found.moeda && normCurrency(found.moeda) !== normCurrency(run.currency))) {
+          finishOffer(run.offerId, 'INDISPONIVEL', 'Oferta encerrada ou alterada no mercado');
+        } else {
+          run.lastSeenAt = Date.now();
+          run.misses = 0;
+        }
+      } else if (!partial && ++run.misses >= 2) {
+        finishOffer(run.offerId, 'INDISPONIVEL', 'Oferta ausente em duas consultas do item/moeda');
+      }
     }
   }
 
