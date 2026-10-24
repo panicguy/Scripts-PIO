@@ -6485,13 +6485,16 @@ queueMicrotask(() => {
       const row = document.createElement('div');
       row.className = 'log-row';
 
-      const st = (l.status || '').toLowerCase();
+      // Logs históricos podem sobreviver ao reload: não exibir agendamento antigo como ativo.
+      const staleSchedule = l.status === 'AGENDADO' && Date.now() - Number(l.timestamp || 0) > 600000;
+      const shownStatus = staleSchedule ? 'EXPIRADO' : (l.status || 'OK');
+      const st = shownStatus.toLowerCase();
       let statusClass = 'sucesso';
       if (st.includes('disparado') || st.includes('comprando')) statusClass = 'disparado';
       else if (st.includes('agendado') || st.includes('limite') || st.includes('slot') ||
                st.includes('cancelado') || st.includes('indisponivel') ||
                st.includes('sem_confirmacao') || st.includes('nao_verificado') ||
-               st.includes('compra_sem_id')) statusClass = 'aviso';
+               st.includes('compra_sem_id') || st.includes('expirado')) statusClass = 'aviso';
       else if (st.includes('erro') || st.includes('falhou') || st.includes('rejeitado') || st.includes('recusado')) statusClass = 'erro';
 
       const d = new Date(l.timestamp || Date.now());
@@ -6532,7 +6535,9 @@ queueMicrotask(() => {
       }
 
       // 4. Limpeza e humanização dos detalhes (remove jargões robóticos legados)
-      let cleanDetails = String(l.details || '').trim();
+      let cleanDetails = staleSchedule
+        ? 'Agendamento antigo sem atualização há mais de 10 minutos; disponibilidade desconhecida'
+        : String(l.details || '').trim();
       cleanDetails = cleanDetails.replace(/^Ordem enviada ao servidor via\s*/i, '');
       cleanDetails = cleanDetails.replace(/^Regra Item:\s*/i, 'Regra: ');
       cleanDetails = cleanDetails.replace(/^Regra Pokemon:\s*/i, 'Regra: ');
@@ -6557,7 +6562,7 @@ queueMicrotask(() => {
             <span class="log-target" title="${targetName}">${targetName}</span>
             ${seller ? `<span class="log-seller" title="Vendedor: ${seller}">de <b>@${seller}</b></span>` : ''}
           </div>
-          <span class="log-status-tag ${statusClass}">${l.status || 'OK'}</span>
+          <span class="log-status-tag ${statusClass}"> ${shownStatus}</span>
         </div>
         <div class="log-detail">
           ${priceSummary ? `<span class="log-price">${priceSummary}</span>` : ''}
