@@ -1724,6 +1724,7 @@ if (typeof window !== 'undefined') {
 
       // Evita compras duplicadas na mesma oferta se já confirmada, agendada ou comprada
       if (sniperState.confirmedOffers[offerId]) continue;
+      if (offerRuns[offerId]) continue;
       if (sniperState.scheduledOffers[offerId]) continue;
       if (sniperState.boughtOffers[offerId] && (now - sniperState.boughtOffers[offerId] < 20000)) continue;
       if (an.estado && an.estado !== 'aberto') continue;
@@ -1982,6 +1983,11 @@ if (typeof window !== 'undefined') {
         const agoraSrv = agoraDoServidor();
         const isFutureCooldown = compravelEm > (agoraSrv + 50);
 
+        const offerRun = createOfferRun(offerId, {
+          targetName: targetDisplayName, seller, price: preco, qty: buyQty,
+          currency: moeda, itemId, ruleId: matchedRule ? matchedRule.id : '',
+          ruleDesc: matchedDesc, releaseAt: isFutureCooldown ? compravelEm : 0
+        });
         if (isFutureCooldown) {
           // O anúncio ainda está no cooldown ANTES de liberar.
           // NÃO DISPARAR ANTES! Quem tenta comprar antes cai em sorteio ou é recusado.
@@ -1989,26 +1995,16 @@ if (typeof window !== 'undefined') {
           const releaseDelayMs = Math.max(50, (compravelEm - agoraSrv) + 100);
           const waitSec = Math.ceil((compravelEm - agoraSrv) / 1000);
           const sellerStr = seller ? ` de @${seller}` : '';
-          console.log(`[Rotom Sniper]: ⏳ Anúncio #${offerId} (${targetDisplayName}${sellerStr}) em cooldown. Disparo pós-liberação garantido em ${releaseDelayMs}ms.`);
+          console.log(`[Rotom Sniper]: ⏳ Anúncio #${offerId} (${targetDisplayName}${sellerStr}) em cooldown. Tentativa prevista em ${releaseDelayMs}ms, sujeita à disponibilidade.`);
 
           showRotomHudToast(
             'DISPARO AGENDADO',
-            `${targetDisplayName}${sellerStr} agendado para compra logo após liberação (${waitSec}s)! (#${offerId})`,
+            `${targetDisplayName}${sellerStr} tentativa prevista após liberação (${waitSec}s), se disponível. (#${offerId})`,
             'scheduled'
           );
 
-          emitSniperLog({
-            id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-            timestamp: Date.now(),
-            targetName: targetDisplayName,
-            seller: seller || '',
-            offerId: offerId,
-            price: preco,
-            qty: buyQty,
-            currency: moeda,
-            status: 'AGENDADO',
-            details: `Cooldown ativo (${waitSec}s) · Disparo garantido após liberação · ${matchedDesc}`
-          });
+          updateOfferStatus(offerRun, 'AGENDADO',
+            `Cooldown ativo (${waitSec}s) · Tentativa após liberação, se disponível · ${matchedDesc}`);
 
           const timers = [];
 
@@ -2035,8 +2031,10 @@ if (typeof window !== 'undefined') {
               console.log(`[Rotom Sniper]: 🔄 Reforço final de compra pós-liberação #${offerId} (+1500ms)...`);
               executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true);
             }
-            clearOfferTimers(offerId);
           }, releaseDelayMs + 1400));
+          timers.push(setTimeout(() => {
+            finishOffer(offerId, 'SEM_CONFIRMACAO', 'Sem confirmação conclusiva do servidor em 5 segundos');
+          }, releaseDelayMs + 5000));
 
           sniperState.scheduledOffers[offerId] = timers;
 
@@ -2055,8 +2053,10 @@ if (typeof window !== 'undefined') {
             if (!sniperState.confirmedOffers[offerId]) {
               executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true);
             }
-            clearOfferTimers(offerId);
           }, 1500));
+          timers.push(setTimeout(() => {
+            finishOffer(offerId, 'SEM_CONFIRMACAO', 'Sem confirmação conclusiva do servidor em 5 segundos');
+          }, 5000));
 
           sniperState.scheduledOffers[offerId] = timers;
         }
@@ -2276,6 +2276,7 @@ if (typeof window !== 'undefined') {
           }, '*');
         } catch (e) {}
 
+        reviewItemSnapshot(itemId, moeda, enrichedLinhas, packet);
         processMarketAnuncios(enrichedLinhas);
         return;
       }
@@ -2677,6 +2678,23 @@ if (typeof window !== 'undefined') {
       sendRaw({ t: 'market.itens' });
     }
 
+    // Revalida periodicamente anúncios agendados pelo item e moeda, sem usar resumos gerais.
+    const pendingGroups = new Map();
+    Object.values(offerRuns).forEach(run => {
+      if (!run.terminal && run.status === 'AGENDADO' && run.itemId) {
+        const key = run.itemId + ':' + normCurrency(run.currency);
+        if (!pendingGroups.has(key)) pendingGroups.set(key, {itemId:run.itemId, moeda:normCurrency(run.currency)});
+      }
+    });
+    const groups = [...pendingGroups.values()];
+    for (let i = 0; i < Math.min(3, groups.length); i++) {
+      const g = groups[(scanCycle * 3 + i) % groups.length];
+      sendRaw({t:'market.item', itemId:g.itemId, moeda:g.moeda});
+    }
+    Object.keys(offerRuns).forEach(id => {
+      const run = offerRuns[id];
+      if (run.terminal && Date.now() - run.finishedAt > 1800000) delete offerRuns[id];
+    });
     // 2. Varredura de Pokémons (alternando ordenações para pegar novidades)
     if (hasPokeRules) {
       setTimeout(() => {
@@ -6447,7 +6465,10 @@ queueMicrotask(() => {
       const st = (l.status || '').toLowerCase();
       let statusClass = 'sucesso';
       if (st.includes('disparado') || st.includes('comprando')) statusClass = 'disparado';
-      else if (st.includes('agendado') || st.includes('limite') || st.includes('slot')) statusClass = 'aviso';
+      else if (st.includes('agendado') || st.includes('limite') || st.includes('slot') ||
+               st.includes('cancelado') || st.includes('indisponivel') ||
+               st.includes('sem_confirmacao') || st.includes('nao_verificado') ||
+               st.includes('compra_sem_id')) statusClass = 'aviso';
       else if (st.includes('erro') || st.includes('falhou') || st.includes('rejeitado') || st.includes('recusado')) statusClass = 'erro';
 
       const d = new Date(l.timestamp || Date.now());
