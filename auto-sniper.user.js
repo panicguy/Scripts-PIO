@@ -1667,6 +1667,7 @@ if (typeof window !== 'undefined') {
         targetName, seller, price: preco, qty: buyQty, currency: moeda, ruleId, ruleDesc
       });
       run.lastSentAt = Date.now();
+      run.qty = Number(buyQty) || 1; // Quantidade efetivamente enviada após calibração de saldo.
       if (!isRetry) {
         // Otimização Preventiva de Saldo: decrementa preventivamente para evitar estouro em compras simultâneas apenas no primeiro disparo
         const mClean = String(moeda || 'gold').toLowerCase();
@@ -2053,6 +2054,7 @@ if (typeof window !== 'undefined') {
           // Anúncio JÁ ESTÁ LIBERADO! (compravelEm <= now ou sem carência)
           // Compra imediata e reforço de garantia dentro da janela de 3s
           executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, false);
+          if (offerRun.terminal) continue; // Sem timers órfãos se a compra já foi cancelada.
 
           const timers = [];
           timers.push(setTimeout(() => {
