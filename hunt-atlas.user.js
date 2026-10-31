@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Atlas de Hunts — completo (KimJongDudu)
 // @namespace    local.pio.hunt-atlas
-// @version      1.5.1
+// @version      1.5.2
 // @description  Coletor, galeria, troca segura de hunts e minimapa móvel com marcadores normais e shiny. Arquivo único.
 // @match        https://pokeidle.io/*
 // @updateURL    https://raw.githubusercontent.com/panicguy/Scripts-PIO/main/hunt-atlas.user.js
@@ -68,7 +68,7 @@ function rankMaps(records,mode='distance'){
 function viewRecord(r){const spawns=uniquePositions(r.spawns);return {...r,spawns,metrics:metrics({...r,spawns}),complete:r.captureMode==='respawn-v2'&&r.complete};}
 if(typeof module==='object'&&module.exports){module.exports={region,catalog,geometry,paths,uniquePositions,liveShiny,viewRecord,metrics,rankMaps,observeMob};return;}
 if(String(root.__poke?.nick||root.__poke?.estado?.nick||'')!=='KimJongDudu')return;
-if(root.__pioHuntAtlas?.version==='1.5.1'){root.__pioHuntAtlas.show?.();return;}
+if(root.__pioHuntAtlas?.version==='1.5.2'){root.__pioHuntAtlas.show?.();return;}
 if(root.__pioHuntAtlas){const old=root.__pioHuntAtlas;old.stop?.();Object.defineProperty(old,'running',{configurable:true,get:()=>false,set:()=>{}});document.getElementById('pio-atlas')?.remove();document.getElementById('pio-atlas-gallery')?.remove();delete root.__pioAtlasRoute;}
 
 const P=root.__poke;
@@ -79,7 +79,7 @@ const active=()=>{const id=P?.activeId??P?.estado?.activeId;return P?.pokemonsMa
 const isTyranitar=()=>/tyranitar/i.test(active()?.nome||active()?.name||document.querySelector('#ativo-card')?.textContent||'');
 const level=()=>Number(P?.level||P?.estado?.level||0);
 const guard=()=>nick()==='KimJongDudu'&&level()>=2000&&isTyranitar();
-const A=root.__pioHuntAtlas={version:'1.5.1',phase:'Preparando',running:false,current:null,frames:0,records:[],pending:[],show(){panel.hidden=false;},stop(){this.running=false;this.phase='Pausado por você';render();}};
+const A=root.__pioHuntAtlas={version:'1.5.2',phase:'Preparando',running:false,current:null,frames:0,records:[],pending:[],show(){panel.hidden=false;},stop(){this.running=false;this.phase='Pausado por você';render();}};
 let viewScene=null,clearing=false,dataEpoch=0;
 let db,queue=[],index=-1,target=null,scene=null,socket=P?.sock,collisionPromise,markers=[],waitingSince=0,lastSend=0,entryConfirmed=false,writing=false,failures=0,rows=new Map(),errors=[];
 const json=async path=>{const r=await fetch(path,{cache:'no-cache'});if(!r.ok)throw Error(path+' HTTP '+r.status);return r.json();};
@@ -172,13 +172,13 @@ const P=window.__poke,A=window.__pioHuntAtlas,socket=P?.sock;
 if(String(P?.nick||P?.estado?.nick||'')!=='KimJongDudu'||!A||!socket||window.__pioAtlasRoute)return;
 const original=socket.send;let pending=null,armed=false,center=!!P.ws?.['campo.init']?.centro;
 const R=window.__pioAtlasRoute={pending:null,version:1};const wild=new Map((P.ws?.['campo.init']?.mobs||[]).map(m=>[m.s,m]));
-function shinyHold(){if(!liveShiny(wild.values()))return false;const b=document.getElementById('rb-center-schedule');if(armed&&b?.getAttribute('aria-pressed')==='true')b.click();armed=false;paint('Shiny vivo no mapa — aguardando antes de sair');return true;}
+function shinyHold(){if(center||!liveShiny(wild.values()))return false;const b=document.getElementById('rb-center-schedule');if(armed&&b?.getAttribute('aria-pressed')==='true')b.click();armed=false;paint('Shiny vivo no mapa — aguardando antes de sair');return true;}
 const enabled=()=>A.running&&String(P.nick||P.estado?.nick||'')==='KimJongDudu';
 function paint(text){A.phase=text;const el=document.querySelector('#pio-atlas .atlas-status');if(el)el.textContent=text;}
 function requestCenter(){if(!enabled()||!pending||shinyHold())return;const schedule=document.getElementById('rb-center-schedule');if(schedule&&!schedule.disabled){if(schedule.getAttribute('aria-pressed')!=='true'){schedule.click();armed=true;}return;}const button=document.getElementById('ir-centro');if(button&&!button.disabled&&button.getClientRects().length)button.click();}
 function flush(){if(!enabled()||!pending||!center||socket.readyState!==1||shinyHold())return;const command=pending;pending=null;R.pending=null;original.call(socket,JSON.stringify(command));paint('Entrando em '+command.slug);}
 socket.send=function(data){let command;try{command=typeof data==='string'?JSON.parse(data):null;}catch{}if(command?.t==='hunt.select'&&enabled()){pending=command;R.pending=command.slug;if(center)flush();else{paint('Aguardando saída segura para o Centro · '+command.slug);requestCenter();}return;}return original.apply(this,arguments);};
-socket.addEventListener('message',e=>{try{const raw=JSON.parse(e.data),m=raw.data&&typeof raw.data==='object'?{...raw,...raw.data}:raw;if(m.t==='campo.init'||m.t==='campo'){if(m.t==='campo.init')wild.clear();for(const mob of m.mobs||[]){const old=wild.get(mob.s),reborn=old&&(old.x===true||old.x===1)&&(mob.x===false||mob.x===0);wild.set(mob.s,{...old,...(reborn?{sh:false,shiny:false}:{}),...mob});}for(const id of m.fora||[])wild.delete(id);if(pending)shinyHold();}if(m.t==='campo.init'){center=!!m.centro;if(center){armed=false;flush();}}}catch{}});
+socket.addEventListener('message',e=>{try{const raw=JSON.parse(e.data),m=raw.data&&typeof raw.data==='object'?{...raw,...raw.data}:raw;if(m.t==='campo.init'||m.t==='campo'){if(m.t==='campo.init'){center=!!m.centro;wild.clear();}for(const mob of m.mobs||[]){const old=wild.get(mob.s),reborn=old&&(old.x===true||old.x===1)&&(mob.x===false||mob.x===0);wild.set(mob.s,{...old,...(reborn?{sh:false,shiny:false}:{}),...mob});}for(const id of m.fora||[])wild.delete(id);if(pending)shinyHold();}if(m.t==='campo.init'){center=!!m.centro;if(center){armed=false;flush();}}}catch{}});
 const oldStop=A.stop.bind(A);A.stop=function(){pending=null;R.pending=null;const b=document.getElementById('rb-center-schedule');if(armed&&b?.getAttribute('aria-pressed')==='true')b.click();armed=false;oldStop();};
 setInterval(()=>{if(!enabled()){pending=null;R.pending=null;return;}if(pending){flush();if(pending)requestCenter();}},1000);
 })();
@@ -201,7 +201,7 @@ function displayState(prefs,economy){return {visible:prefs.visible!==false&&!eco
 function newShinies(entities,seen){const live=new Set();let added=0;for(const [id,m] of entities){if(markerKind(m)==='shiny'){live.add(id);if(!seen.has(id))added++;}}seen.clear();for(const id of live)seen.add(id);return added;}
 if(typeof module==='object'&&module.exports){module.exports={...module.exports,newShinies,markerKind,mergeEntity,position,displayState,clamp};return;}
 const P=root.__poke;if(String(P?.nick||P?.estado?.nick||'')!=='KimJongDudu')return;
-if(root.__pioAtlasUI?.version==='1.5.1'){root.__pioAtlasUI.open();return;}
+if(root.__pioAtlasUI?.version==='1.5.2'){root.__pioAtlasUI.open();return;}
 root.__pioAtlasUI?.destroy?.();
 const KEY='pio:atlas-ui:v1:KimJongDudu';let prefs={visible:true,compact:false,left:null,top:null,sound:true};try{prefs={...prefs,...JSON.parse(localStorage.getItem(KEY)||'{}')};}catch{}
 let panel=null,base=null,stage=null,layer=null,handle=null,mini=null,hudButton=null,drag=null,socket=null,init=null,tag=null,entities=new Map(),latestHero=null,timer=null,raf=null,lastDraw=0,destroyed=false;
@@ -226,7 +226,7 @@ function attach(){if(destroyed)return;const next=document.getElementById('pio-at
  const current=P.sock;if(current&&current!==socket){if(socket)socket.removeEventListener('message',onMessage);socket=current;socket.addEventListener('message',onMessage);const initial=P.ws?.['campo.init'];if(initial)onPacket(initial);}apply();}
 function onMessage(e){try{onPacket(JSON.parse(e.data));}catch{}}
 function onPacket(raw){const m=raw?.data&&typeof raw.data==='object'?{...raw,...raw.data}:raw;if(!m)return;if(m.t==='campo.init'){init=m;tag=m.sl??null;entities.clear();heard.clear();pendingSound=false;latestHero=null;if(m.centro||m.pvp||m.casa!=null)return;for(const mob of m.mobs||[])if(mob.s!=null)entities.set(String(mob.s),mergeEntity(null,mob,m.ts,now()));if(m.heroi)latestHero=mergeEntity(null,m.heroi,m.ts,now());}
- else if(m.t==='campo'&&(m.sl??null)===tag){for(const mob of m.mobs||[])if(mob.s!=null)entities.set(String(mob.s),mergeEntity(entities.get(String(mob.s)),mob,m.ts,now()));for(const id of m.fora||[])entities.delete(String(id));if(m.heroi)latestHero=mergeEntity(latestHero,m.heroi,m.ts,now());}if(newShinies(entities,heard)>0)beep();}
+ else if(m.t==='campo'&&(m.sl??null)===tag){if(!init||init.centro||init.pvp||init.casa!=null){entities.clear();heard.clear();pendingSound=false;return;}for(const mob of m.mobs||[])if(mob.s!=null)entities.set(String(mob.s),mergeEntity(entities.get(String(mob.s)),mob,m.ts,now()));for(const id of m.fora||[])entities.delete(String(id));if(m.heroi)latestHero=mergeEntity(latestHero,m.heroi,m.ts,now());}if(newShinies(entities,heard)>0)beep();}
 function star(ctx,x,y,r){ctx.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*.43:r;const xx=x+Math.cos(a)*rr,yy=y+Math.sin(a)*rr;if(i===0)ctx.moveTo(xx,yy);else ctx.lineTo(xx,yy);}ctx.closePath();ctx.fill();ctx.stroke();}
 function draw(time){raf=requestAnimationFrame(draw);if(time-lastDraw<65)return;lastDraw=time;if(!panel||!layer||!base||!init)return;const state=displayState(prefs,economy());if(!state.visible||document.hidden)return;if(layer.width!==base.width)layer.width=base.width;if(layer.height!==base.height)layer.height=base.height;const ctx=layer.getContext('2d');ctx.clearRect(0,0,layer.width,layer.height);
  if(init.centro||init.pvp||init.casa!=null||init.slug!==root.__pioHuntAtlas?.current||!Array.isArray(init.box))return;const w=init.box[2],h=init.box[3];if(!(w>0&&h>0))return;const scale=Math.min(layer.width/w,layer.height/h),ox=(layer.width-w*scale)/2,oy=(layer.height-h*scale)/2;const pt=p=>({x:ox+(p.c+.5)*scale,y:oy+(p.r+.5)*scale});ctx.save();ctx.beginPath();ctx.rect(ox,oy,w*scale,h*scale);ctx.clip();
@@ -235,7 +235,7 @@ function draw(time){raf=requestAnimationFrame(draw);if(time-lastDraw<65)return;l
  ctx.restore();}
 const modeObserver=new MutationObserver(()=>{apply();place();});modeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['class']});modeObserver.observe(document.body,{attributes:true,attributeFilter:['class']});
 const onResize=()=>{place();save();};window.addEventListener('resize',onResize);timer=setInterval(attach,400);attach();raf=requestAnimationFrame(draw);
-root.__pioAtlasUI={version:'1.5.1',open(){prefs.visible=true;save();apply();},toggle,compact(){prefs.compact=!prefs.compact;save();apply();place();},destroy(){destroyed=true;clearInterval(timer);cancelAnimationFrame(raf);modeObserver.disconnect();window.removeEventListener('resize',onResize);socket?.removeEventListener('message',onMessage);document.removeEventListener('pointerdown',gesture,{capture:true});void audio?.close();layer?.remove();hudButton?.remove();style.remove();}};
+root.__pioAtlasUI={version:'1.5.2',open(){prefs.visible=true;save();apply();},toggle,compact(){prefs.compact=!prefs.compact;save();apply();place();},destroy(){destroyed=true;clearInterval(timer);cancelAnimationFrame(raf);modeObserver.disconnect();window.removeEventListener('resize',onResize);socket?.removeEventListener('message',onMessage);document.removeEventListener('pointerdown',gesture,{capture:true});void audio?.close();layer?.remove();hudButton?.remove();style.remove();}};
 })(typeof window==='object'?window:globalThis);
 
 }
