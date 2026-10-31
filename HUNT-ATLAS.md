@@ -31,3 +31,11 @@ Se o jogo informar um shiny vivo, a coleta permanece na hunt e suspende a saída
 Pausar interrompe a navegação automática; o minimapa continua acompanhando hunts abertas manualmente, sem registrar novas leituras no banco. A visualização não requer Tyranitar nem nível 2000, mantendo a restrição à conta KimJongDudu. A coleta automática continua exigindo os requisitos anteriores.
 
 Um shiny vivo informado pelo jogo dispara três notas. Movimentos do mesmo Pokémon não repetem o som; outra aparição após morte/remoção pode alertar novamente. Há botões Som: ligado/desligado e Testar som. Clique em Testar som para liberar o áudio e conferir o volume. Se o navegador bloquear o áudio, o alerta pendente é tocado após interação. O som continua com a coleta pausada e o minimapa oculto pelo modo economia, desde que a página continue recebendo os eventos do jogo. Não detecta shiny que o servidor não enviou.
+
+## Rankings — versão 1.4.0
+
+Abra Mapas e selecione Menor área ou Menores trajetos. A galeria se atualiza ao salvar novas leituras e usa a leitura mais recente de cada hunt. Menor área ordena pela quantidade de tiles caminháveis; Menores trajetos ordena pela média de passos entre todos os pares de posições válidas, com maior trajeto como desempate.
+
+O cálculo usa busca em largura sobre tiles livres em quatro direções, contornando bloqueios e sem atravessar áreas desconhecidas. Mostra passos médios e máximos, pares alcançáveis e sem caminho, posições excluídas, área e densidade por 100 tiles caminháveis. São estimativas entre posições observadas na entrada, não respawns confirmados nem a rota do servidor. Não mede XP nem abates por hora.
+
+Geometrias parciais aparecem ao final sem classificação. O ranking de trajetos também exige pelo menos duas posições válidas, todos os pontos sobre tiles caminháveis e todos os pares conectados. Leituras antigas não entram no ranking de trajetos até serem refeitas; sua área conhecida ainda pode ser comparada quando a geometria está completa. As métricas novas são salvas junto do mapa e incluídas no JSON exportado.
