@@ -51,3 +51,7 @@ O ranking de trajetos passa a usar exclusivamente coordenadas confirmadas das no
 ## Limpar mapeamentos — versão 1.5.1
 
 O botão Limpar todos os mapeamentos aparece no painel e na galeria. Uma confirmação informa que serão apagados todos os mapas, histórico e progresso locais. Cancelar não altera dados nem pausa a coleta. Confirmar pausa a navegação e limpa as duas lojas do banco em uma única transação, protegendo contra gravações antigas em andamento. Os rankings ficam vazios; Retomar inicia uma nova coleta. Preferências do minimapa, som e arquivos JSON já exportados são preservados. Exporte um backup antes se quiser guardar o histórico. A atualização do script por si só não apaga os mapas.
+
+## Centro Pokémon — versão 1.5.2
+
+Pokémon shiny no Centro são ignorados para alertas sonoros e bloqueio da troca de hunt, tanto no pacote inicial como nas atualizações seguintes. Entrar no Centro limpa qualquer alerta pendente da hunt anterior. O alerta e a permanência por shiny vivo continuam ativos nas hunts.
