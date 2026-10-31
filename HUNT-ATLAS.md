@@ -39,3 +39,11 @@ Abra Mapas e selecione Menor área ou Menores trajetos. A galeria se atualiza ao
 O cálculo usa busca em largura sobre tiles livres em quatro direções, contornando bloqueios e sem atravessar áreas desconhecidas. Mostra passos médios e máximos, pares alcançáveis e sem caminho, posições excluídas, área e densidade por 100 tiles caminháveis. São estimativas entre posições observadas na entrada, não respawns confirmados nem a rota do servidor. Não mede XP nem abates por hora.
 
 Geometrias parciais aparecem ao final sem classificação. O ranking de trajetos também exige pelo menos duas posições válidas, todos os pontos sobre tiles caminháveis e todos os pares conectados. Leituras antigas não entram no ranking de trajetos até serem refeitas; sua área conhecida ainda pode ser comparada quando a geometria está completa. As métricas novas são salvas junto do mapa e incluídas no JSON exportado.
+
+## Coleta por nascimentos — versão 1.5.0 (substitui o modo rápido)
+
+As posições na entrada voltam a ser provisórias. A confirmação usa reaparição viva após morte observada, ou primeira aparição viva explícita e sem passo de movimento no pacote. Movimentos não criam pontos. Coordenadas repetidas são deduplicadas, mesmo com IDs diferentes em ciclos posteriores. Trata-se de evidência recebida do cliente; não se presume que um ponto não observado exista.
+
+Cada passagem aguarda até 180 segundos, podendo terminar após 15 segundos quando todos os pontos esperados forem confirmados e houver geometria. Leituras parciais podem voltar à fila, no máximo três passagens. Um shiny vivo continua segurando a saída. Uma leitura só é completa com geometria sem áreas desconhecidas e contagem confirmada igual ao total esperado; divergências permanecem parciais. Dados antigos de entrada não dispensam nova coleta.
+
+O ranking de trajetos passa a usar exclusivamente coordenadas confirmadas das novas leituras. A galeria informa a cobertura confirmada/esperada; comparações com cobertura parcial podem mudar conforme mais nascimentos são observados. As distâncias continuam estimadas em quatro direções, sem reproduzir o pathfinding do servidor. Permanecem o minimapa durante a pausa e o alerta sonoro de shiny.
