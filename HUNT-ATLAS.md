@@ -55,3 +55,7 @@ O botão Limpar todos os mapeamentos aparece no painel e na galeria. Uma confirm
 ## Centro Pokémon — versão 1.5.2
 
 Pokémon shiny no Centro são ignorados para alertas sonoros e bloqueio da troca de hunt, tanto no pacote inicial como nas atualizações seguintes. Entrar no Centro limpa qualquer alerta pendente da hunt anterior. O alerta e a permanência por shiny vivo continuam ativos nas hunts.
+
+## Ordem da coleta — versão 1.5.3
+
+A primeira passagem segue Outland → Johto → Hoenn → Sinnoh. Dentro de cada região, ordena pelo nome visível da hunt em A–Z, sem priorizar o nível; o limite de acesso até 2000 continua valendo. Hunts com leitura completa já salva são puladas. As revisões de leituras parciais entram no fim da fila, depois da primeira passagem, e aparecem identificadas como Revisão. A ordem de coleta é independente dos rankings por área e trajeto na galeria.
