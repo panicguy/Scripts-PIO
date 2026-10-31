@@ -19,3 +19,9 @@ Botão Minimapa abaixo do rank para abrir/fechar. Arraste pelo título ou mapa. 
 Os mapas ficam no IndexedDB local `PIO-HuntAtlas-v1`, mantendo compatibilidade com as versões anteriores. As preferências continuam em `pio:atlas-ui:v1:KimJongDudu`. Atualizar o script não apaga esses dados. Abra **Mapas** para consultar e **Exportar** para fazer backup JSON. Os mapas não são enviados ao GitHub e não ficam disponíveis automaticamente em outro computador/perfil. Limpar os dados do launcher pode apagá-los.
 
 Leituras incompletas continuam identificadas como parciais. Distâncias são estimativas sobre a geometria lida, não o caminho garantido pelo servidor.
+
+## Coleta rápida — versão 1.2.0
+
+Após carregar a geometria, salva somente as posições únicas dos Pokémon vivos recebidos no pacote de entrada e solicita a troca segura pelo Centro. Não aguarda outro ciclo de respawn nem repete automaticamente leituras parciais. Essas posições não são tratadas como pontos de respawn confirmados; por isso o contador não usa mais o total esperado como denominador. Leituras antigas são identificadas e passam novamente pela coleta, preservando o histórico no banco.
+
+Se o jogo informar um shiny vivo, a coleta permanece na hunt e suspende a saída agendada pelo Atlas. Quando ele morrer ou sair da lista recebida do servidor, a troca pode continuar. Isso não garante captura, nem detecta Pokémon que o servidor não informou. Não usa Escape Rope nem Desistir do Combate. Mapas com áreas sem leitura continuam parciais; o modo rápido não os torna completos artificialmente.
