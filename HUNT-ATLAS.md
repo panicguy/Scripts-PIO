@@ -47,3 +47,7 @@ As posições na entrada voltam a ser provisórias. A confirmação usa reapari�
 Cada passagem aguarda até 180 segundos, podendo terminar após 15 segundos quando todos os pontos esperados forem confirmados e houver geometria. Leituras parciais podem voltar à fila, no máximo três passagens. Um shiny vivo continua segurando a saída. Uma leitura só é completa com geometria sem áreas desconhecidas e contagem confirmada igual ao total esperado; divergências permanecem parciais. Dados antigos de entrada não dispensam nova coleta.
 
 O ranking de trajetos passa a usar exclusivamente coordenadas confirmadas das novas leituras. A galeria informa a cobertura confirmada/esperada; comparações com cobertura parcial podem mudar conforme mais nascimentos são observados. As distâncias continuam estimadas em quatro direções, sem reproduzir o pathfinding do servidor. Permanecem o minimapa durante a pausa e o alerta sonoro de shiny.
+
+## Limpar mapeamentos — versão 1.5.1
+
+O botão Limpar todos os mapeamentos aparece no painel e na galeria. Uma confirmação informa que serão apagados todos os mapas, histórico e progresso locais. Cancelar não altera dados nem pausa a coleta. Confirmar pausa a navegação e limpa as duas lojas do banco em uma única transação, protegendo contra gravações antigas em andamento. Os rankings ficam vazios; Retomar inicia uma nova coleta. Preferências do minimapa, som e arquivos JSON já exportados são preservados. Exporte um backup antes se quiser guardar o histórico. A atualização do script por si só não apaga os mapas.
