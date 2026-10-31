@@ -63,3 +63,9 @@ A primeira passagem segue Outland → Johto → Hoenn → Sinnoh. Dentro de cada
 ## Reiniciar a sequência — versão 1.5.4
 
 Começar do início A–Z refaz toda a fila em Outland → Johto → Hoenn → Sinnoh, sem excluir leituras existentes nem pular hunts já completas. Requer os mesmos requisitos da coleta e catálogo Outland disponível; caso contrário permanece pausado. Retomar conserva o alvo anterior. A tela passa a mostrar o alvo solicitado durante a navegação. Entrada não confirmada pausa em vez de pular automaticamente; Retomar tenta o mesmo alvo novamente. O temporizador de coleta também fica disponível após limpeza/reinício do progresso.
+
+## Início manual — versão 1.6.0 (substitui os controles anteriores)
+
+Ao abrir ou recarregar a página, inclusive por F5, a coleta sempre inicia desligada e não envia troca de hunt. Iniciar reconstrói a fila A–Z na ordem Outland → Johto → Hoenn → Sinnoh e muda para Parar. Parar encerra a execução e cancela a saída pendente criada pelo Atlas, voltando a Iniciar. Não sai automaticamente da hunt atual e não apaga os mapas. Um novo Iniciar começa a sequência do início.
+
+Pausar/Retomar é um botão separado: preserva o alvo para continuar a execução. Fica desabilitado quando a coleta está desligada. O antigo botão Começar do início A–Z foi incorporado a Iniciar. A visualização manual e os alertas de shiny nas hunts continuam ativos com a coleta desligada. Não interfere em outros scripts que possam iniciar caça por conta própria.
