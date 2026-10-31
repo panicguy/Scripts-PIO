@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Atlas de Hunts — completo (KimJongDudu)
 // @namespace    local.pio.hunt-atlas
-// @version      1.5.2
+// @version      1.5.3
 // @description  Coletor, galeria, troca segura de hunts e minimapa móvel com marcadores normais e shiny. Arquivo único.
 // @match        https://pokeidle.io/*
 // @updateURL    https://raw.githubusercontent.com/panicguy/Scripts-PIO/main/hunt-atlas.user.js
@@ -28,7 +28,7 @@ function region(h,markers){
  for(const e of h.especies||[]){const id=Number(e.pokeId);const r=id>=10000?'outland':id>=152&&id<=251?'johto':id>=252&&id<=386?'hoenn':id>=387&&id<=493?'sinnoh':'other';weights.set(r,(weights.get(r)||0)+(Number(e.pontos)||1));}
  return [...weights].sort((a,b)=>b[1]-a[1])[0]?.[0]||'unknown';
 }
-function catalog(hunts,markers,level){return (hunts||[]).filter(h=>h.slug&&Number.isFinite(Number(h.nivel))&&Number(h.nivel)>0&&Number(h.nivel)<=Math.min(2000,level)&&REGIONS.has(region(h,markers))).map(h=>({...h,region:region(h,markers)})).sort((a,b)=>a.region.localeCompare(b.region)||a.nivel-b.nivel||a.slug.localeCompare(b.slug));}
+function catalog(hunts,markers,level){return (hunts||[]).filter(h=>h.slug&&Number.isFinite(Number(h.nivel))&&Number(h.nivel)>0&&Number(h.nivel)<=Math.min(2000,level)&&REGIONS.has(region(h,markers))).map(h=>({...h,region:region(h,markers)})).sort((a,b)=>['outland','johto','hoenn','sinnoh'].indexOf(a.region)-['outland','johto','hoenn','sinnoh'].indexOf(b.region)||String(a.nome||a.name||a.slug).localeCompare(String(b.nome||b.name||b.slug),'pt-BR',{sensitivity:'base',numeric:true})||a.slug.localeCompare(b.slug));}
 function geometry(data,collision,box,groundZ){
  if(!Array.isArray(box)||box.length<4||!box.every(Number.isFinite)||!Number.isInteger(box[2])||!Number.isInteger(box[3])||box[2]<1||box[3]<1||box[2]*box[3]>100000)throw Error('Limites do mapa inválidos');
  if(!Array.isArray(data.tiles)||!Array.isArray(collision.blocking))throw Error('Geometria/colisão não disponível');
@@ -68,7 +68,7 @@ function rankMaps(records,mode='distance'){
 function viewRecord(r){const spawns=uniquePositions(r.spawns);return {...r,spawns,metrics:metrics({...r,spawns}),complete:r.captureMode==='respawn-v2'&&r.complete};}
 if(typeof module==='object'&&module.exports){module.exports={region,catalog,geometry,paths,uniquePositions,liveShiny,viewRecord,metrics,rankMaps,observeMob};return;}
 if(String(root.__poke?.nick||root.__poke?.estado?.nick||'')!=='KimJongDudu')return;
-if(root.__pioHuntAtlas?.version==='1.5.2'){root.__pioHuntAtlas.show?.();return;}
+if(root.__pioHuntAtlas?.version==='1.5.3'){root.__pioHuntAtlas.show?.();return;}
 if(root.__pioHuntAtlas){const old=root.__pioHuntAtlas;old.stop?.();Object.defineProperty(old,'running',{configurable:true,get:()=>false,set:()=>{}});document.getElementById('pio-atlas')?.remove();document.getElementById('pio-atlas-gallery')?.remove();delete root.__pioAtlasRoute;}
 
 const P=root.__poke;
@@ -79,7 +79,7 @@ const active=()=>{const id=P?.activeId??P?.estado?.activeId;return P?.pokemonsMa
 const isTyranitar=()=>/tyranitar/i.test(active()?.nome||active()?.name||document.querySelector('#ativo-card')?.textContent||'');
 const level=()=>Number(P?.level||P?.estado?.level||0);
 const guard=()=>nick()==='KimJongDudu'&&level()>=2000&&isTyranitar();
-const A=root.__pioHuntAtlas={version:'1.5.2',phase:'Preparando',running:false,current:null,frames:0,records:[],pending:[],show(){panel.hidden=false;},stop(){this.running=false;this.phase='Pausado por você';render();}};
+const A=root.__pioHuntAtlas={version:'1.5.3',phase:'Preparando',running:false,current:null,frames:0,records:[],pending:[],show(){panel.hidden=false;},stop(){this.running=false;this.phase='Pausado por você';render();}};
 let viewScene=null,clearing=false,dataEpoch=0;
 let db,queue=[],index=-1,target=null,scene=null,socket=P?.sock,collisionPromise,markers=[],waitingSince=0,lastSend=0,entryConfirmed=false,writing=false,failures=0,rows=new Map(),errors=[];
 const json=async path=>{const r=await fetch(path,{cache:'no-cache'});if(!r.ok)throw Error(path+' HTTP '+r.status);return r.json();};
@@ -91,7 +91,7 @@ const style=document.createElement('style');style.textContent=`
 #pio-atlas{position:fixed;right:18px;top:160px;z-index:10020;width:260px;color:#e5f0f4;background:#11232ef5;border:1px solid #8de4cc;border-radius:14px;padding:12px;box-shadow:0 12px 40px #0008;font:12px/1.45 Segoe UI,sans-serif;box-sizing:border-box}#pio-atlas *{box-sizing:border-box}#pio-atlas h3{font-size:14px;margin:0 0 5px}#pio-atlas p{margin:6px 0;color:#b6cbd5}#pio-atlas canvas{display:block;width:100%;height:150px;background:#0b1720;border-radius:7px;margin:8px 0;image-rendering:pixelated}#pio-atlas button,#pio-atlas-gallery button{padding:6px 9px;color:#dceef3;background:#233d4e;border:1px solid #62818d;border-radius:6px;cursor:pointer;font:inherit;margin:3px 3px 0 0}#pio-atlas .atlas-status{color:#9be6ce;overflow-wrap:anywhere}#pio-atlas-gallery{position:fixed;inset:5%;z-index:10030;background:#11232efc;border:1px solid #8de4cc;border-radius:16px;color:#e5f0f4;padding:20px;overflow:auto;font:13px/1.5 Segoe UI,sans-serif}#pio-atlas-gallery .atlas-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}#pio-atlas-gallery article{border:1px solid #415a67;border-radius:12px;padding:14px;background:#172e3a}#pio-atlas-gallery canvas{width:100%;height:180px;image-rendering:pixelated;background:#091720}#pio-atlas [hidden],#pio-atlas-gallery[hidden]{display:none!important}`;document.head.append(style);
 const panel=document.createElement('section');panel.id='pio-atlas';
 const title=document.createElement('h3');title.textContent='Atlas · KimJongDudu';
-const sub=document.createElement('p');sub.textContent='Outland · Johto · Hoenn · Sinnoh / até Nv 2000';
+const sub=document.createElement('p');sub.textContent='Outland → Johto → Hoenn → Sinnoh · A–Z / até Nv 2000';
 const status=document.createElement('p');status.className='atlas-status';
 const canvas=document.createElement('canvas');canvas.width=480;canvas.height=300;
 const details=document.createElement('p');
@@ -127,7 +127,7 @@ async function exportAll(){const all=await readAll();const out={schema:'pio-hunt
 function safeSend(command){if(!guard()){A.stop();A.phase='Pausado: personagem/nível/Tyranitar mudou';return false;}if(!socket||socket.readyState!==1){A.stop();A.phase='Pausado: desconectado';return false;}if(Date.now()-lastSend<4000)return false;socket.send(JSON.stringify(command));lastSend=Date.now();return true;}
 async function next(){if(writing)return;scene=null;entryConfirmed=false;index++;target=queue[index]||null;waitingSince=Date.now();failures=0;
  if(!target){A.running=false;A.phase='Varredura concluída · '+A.pending.length+' pendências';await recordRun();render();return;}
- A.phase='Entrando em '+(target.nome||target.slug);await recordRun();safeSend({t:'hunt.select',slug:target.slug});render();}
+ A.phase=(Number(target.attempt||1)>1?'Revisão · ':'')+target.region+' · Entrando em '+(target.nome||target.slug);await recordRun();safeSend({t:'hunt.select',slug:target.slug});render();}
 async function startScene(m){if(m.centro||m.pvp||m.casa!=null){viewScene=null;scene=null;A.current=null;render();return;}
 const collecting=A.running&&m.slug===target?.slug;const hunt=(P.hunts||P.ws?.welcome?.hunts||[]).find(h=>h.slug===m.slug)||{};if(collecting)entryConfirmed=true;
 const own={slug:m.slug,tag:m.sl??null,started:Date.now(),hero:m.heroi||null,slots:new Map(),collecting,record:{slug:m.slug,name:hunt.nome||m.slug,region:region(hunt,markers),level:Number(hunt.nivel||0),mapSlug:m.mapa||m.slug,geometry:null,spawns:[],expected:(hunt.especies||[]).reduce((n,e)=>n+(Number(e.pontos)||0),0),savedAt:0,complete:false}};viewScene=own;scene=collecting?own:null;A.current=m.slug;
@@ -201,7 +201,7 @@ function displayState(prefs,economy){return {visible:prefs.visible!==false&&!eco
 function newShinies(entities,seen){const live=new Set();let added=0;for(const [id,m] of entities){if(markerKind(m)==='shiny'){live.add(id);if(!seen.has(id))added++;}}seen.clear();for(const id of live)seen.add(id);return added;}
 if(typeof module==='object'&&module.exports){module.exports={...module.exports,newShinies,markerKind,mergeEntity,position,displayState,clamp};return;}
 const P=root.__poke;if(String(P?.nick||P?.estado?.nick||'')!=='KimJongDudu')return;
-if(root.__pioAtlasUI?.version==='1.5.2'){root.__pioAtlasUI.open();return;}
+if(root.__pioAtlasUI?.version==='1.5.3'){root.__pioAtlasUI.open();return;}
 root.__pioAtlasUI?.destroy?.();
 const KEY='pio:atlas-ui:v1:KimJongDudu';let prefs={visible:true,compact:false,left:null,top:null,sound:true};try{prefs={...prefs,...JSON.parse(localStorage.getItem(KEY)||'{}')};}catch{}
 let panel=null,base=null,stage=null,layer=null,handle=null,mini=null,hudButton=null,drag=null,socket=null,init=null,tag=null,entities=new Map(),latestHero=null,timer=null,raf=null,lastDraw=0,destroyed=false;
@@ -235,7 +235,7 @@ function draw(time){raf=requestAnimationFrame(draw);if(time-lastDraw<65)return;l
  ctx.restore();}
 const modeObserver=new MutationObserver(()=>{apply();place();});modeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['class']});modeObserver.observe(document.body,{attributes:true,attributeFilter:['class']});
 const onResize=()=>{place();save();};window.addEventListener('resize',onResize);timer=setInterval(attach,400);attach();raf=requestAnimationFrame(draw);
-root.__pioAtlasUI={version:'1.5.2',open(){prefs.visible=true;save();apply();},toggle,compact(){prefs.compact=!prefs.compact;save();apply();place();},destroy(){destroyed=true;clearInterval(timer);cancelAnimationFrame(raf);modeObserver.disconnect();window.removeEventListener('resize',onResize);socket?.removeEventListener('message',onMessage);document.removeEventListener('pointerdown',gesture,{capture:true});void audio?.close();layer?.remove();hudButton?.remove();style.remove();}};
+root.__pioAtlasUI={version:'1.5.3',open(){prefs.visible=true;save();apply();},toggle,compact(){prefs.compact=!prefs.compact;save();apply();place();},destroy(){destroyed=true;clearInterval(timer);cancelAnimationFrame(raf);modeObserver.disconnect();window.removeEventListener('resize',onResize);socket?.removeEventListener('message',onMessage);document.removeEventListener('pointerdown',gesture,{capture:true});void audio?.close();layer?.remove();hudButton?.remove();style.remove();}};
 })(typeof window==='object'?window:globalThis);
 
 }
