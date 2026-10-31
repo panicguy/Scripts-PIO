@@ -59,3 +59,7 @@ Pokémon shiny no Centro são ignorados para alertas sonoros e bloqueio da troca
 ## Ordem da coleta — versão 1.5.3
 
 A primeira passagem segue Outland → Johto → Hoenn → Sinnoh. Dentro de cada região, ordena pelo nome visível da hunt em A–Z, sem priorizar o nível; o limite de acesso até 2000 continua valendo. Hunts com leitura completa já salva são puladas. As revisões de leituras parciais entram no fim da fila, depois da primeira passagem, e aparecem identificadas como Revisão. A ordem de coleta é independente dos rankings por área e trajeto na galeria.
+
+## Reiniciar a sequência — versão 1.5.4
+
+Começar do início A–Z refaz toda a fila em Outland → Johto → Hoenn → Sinnoh, sem excluir leituras existentes nem pular hunts já completas. Requer os mesmos requisitos da coleta e catálogo Outland disponível; caso contrário permanece pausado. Retomar conserva o alvo anterior. A tela passa a mostrar o alvo solicitado durante a navegação. Entrada não confirmada pausa em vez de pular automaticamente; Retomar tenta o mesmo alvo novamente. O temporizador de coleta também fica disponível após limpeza/reinício do progresso.
