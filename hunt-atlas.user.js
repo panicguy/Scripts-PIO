@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Atlas de Hunts — completo (KimJongDudu)
 // @namespace    local.pio.hunt-atlas
-// @version      1.3.0
+// @version      1.4.0
 // @description  Coletor, galeria, troca segura de hunts e minimapa móvel com marcadores normais e shiny. Arquivo único.
 // @match        https://pokeidle.io/*
 // @updateURL    https://raw.githubusercontent.com/panicguy/Scripts-PIO/main/hunt-atlas.user.js
@@ -36,8 +36,8 @@ function geometry(data,collision,box,groundZ){
  for(const t of data.tiles){if(t[2]!==z)continue;const x=t[0]-x0,y=t[1]-y0;if(x<0||x>=w||y<0||y>=h)continue;const ids=[t[3],...(t[4]||[]).map(it=>Array.isArray(it)?it[0]:it)];grid[y*w+x]=ids.some(id=>blocked.has(Number(id)))?2:t[3]?1:0;}
  return {w,h,z,box,grid:Array.from(grid),unknown:grid.filter(v=>v===0).length,blocked:grid.filter(v=>v===2).length,source:'assets/world/maps + collision.json; leitura do cliente'};
 }
-function paths(g,spawns){
- const points=spawns.filter(p=>p.confirmed&&Number.isInteger(p.c)&&Number.isInteger(p.r)&&p.c>=0&&p.r>=0&&p.c<g.w&&p.r<g.h&&g.grid[p.r*g.w+p.c]===1);let max=0,total=0,pairs=0,unreachable=0;
+function paths(g,spawns,estimated=false){
+ const points=uniquePositions(spawns).filter(p=>(estimated||p.confirmed)&&Number.isInteger(p.c)&&Number.isInteger(p.r)&&p.c>=0&&p.r>=0&&p.c<g.w&&p.r<g.h&&g.grid[p.r*g.w+p.c]===1);let max=0,total=0,pairs=0,unreachable=0;
  for(let k=0;k<points.length;k++){const d=new Int32Array(g.w*g.h).fill(-1),queue=[points[k].r*g.w+points[k].c];d[queue[0]]=0;
  for(let head=0;head<queue.length;head++){const n=queue[head],x=n%g.w,y=Math.floor(n/g.w);for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=g.w||yy>=g.h)continue;const j=yy*g.w+xx;if(g.grid[j]===1&&d[j]===-1){d[j]=d[n]+1;queue.push(j);}}}
  for(let j=k+1;j<points.length;j++){const v=d[points[j].r*g.w+points[j].c];if(v<0)unreachable++;else{max=Math.max(max,v);total+=v;pairs++;}}
@@ -47,10 +47,28 @@ function paths(g,spawns){
 
 function uniquePositions(points){const seen=new Set();return (points||[]).filter(p=>{const k=p.c+':'+p.r;if(!Number.isInteger(p.c)||!Number.isInteger(p.r)||seen.has(k))return false;seen.add(k);return true;});}
 function liveShiny(mobs){return [...mobs].some(m=>!m.bn&&m.ti===undefined&&!m.cura&&!m.tm&&!m.depot&&!m.tr&&m.x!==true&&m.x!==1&&(m.sh===true||m.sh===1||m.shiny===true||m.shiny===1));}
-function viewRecord(r){const spawns=uniquePositions(r.spawns);return {...r,spawns,complete:r.captureMode==='entry-v1'&&r.complete};}
-if(typeof module==='object'&&module.exports){module.exports={region,catalog,geometry,paths,uniquePositions,liveShiny,viewRecord};return;}
+
+function metrics(rec){
+ const g=rec.geometry;if(!g)return null;
+ const positions=uniquePositions(rec.spawns),walkable=g.grid.filter(v=>v===1).length;
+ const valid=positions.filter(p=>p.c>=0&&p.r>=0&&p.c<g.w&&p.r<g.h&&g.grid[p.r*g.w+p.c]===1);
+ const routes=paths(g,positions,true);
+ return {version:1,walkable,unknown:g.grid.filter(v=>v===0).length,positions:positions.length,validPositions:valid.length,excludedPositions:positions.length-valid.length,density:walkable?Math.round(valid.length/walkable*10000)/100:null,routes,basis:rec.captureMode==='entry-v1'?'entrada — estimativa':'histórico antigo — requer nova leitura',provisional:g.grid.includes(0),distanceRankable:rec.captureMode==='entry-v1'&&valid.length>=2&&routes.unreachable===0&&valid.length===positions.length&&routes.meanSteps!==null};
+}
+function rankMaps(records,mode='distance'){
+ const latest=new Map();for(const r of records)if(r.geometry&&(!latest.has(r.slug)||r.savedAt>latest.get(r.slug).savedAt))latest.set(r.slug,r);
+ return [...latest.values()].map(viewRecord).sort((a,b)=>{
+ const am=a.metrics,bm=b.metrics;
+ const eligible=m=>!m.provisional&&(mode==='area'?m.walkable>0:m.distanceRankable);
+ const diff=Number(eligible(bm))-Number(eligible(am));if(diff)return diff;
+ const value=m=>mode==='area'?m.walkable:m.distanceRankable?m.routes.meanSteps:Infinity;
+ return value(am)-value(bm)||(am.routes.maxSteps??Infinity)-(bm.routes.maxSteps??Infinity)||String(a.name||a.slug).localeCompare(String(b.name||b.slug));
+ });
+}
+function viewRecord(r){const spawns=uniquePositions(r.spawns);return {...r,spawns,metrics:metrics({...r,spawns}),complete:r.captureMode==='entry-v1'&&r.complete};}
+if(typeof module==='object'&&module.exports){module.exports={region,catalog,geometry,paths,uniquePositions,liveShiny,viewRecord,metrics,rankMaps};return;}
 if(String(root.__poke?.nick||root.__poke?.estado?.nick||'')!=='KimJongDudu')return;
-if(root.__pioHuntAtlas?.version==='1.3.0'){root.__pioHuntAtlas.show?.();return;}
+if(root.__pioHuntAtlas?.version==='1.4.0'){root.__pioHuntAtlas.show?.();return;}
 if(root.__pioHuntAtlas){const old=root.__pioHuntAtlas;old.stop?.();Object.defineProperty(old,'running',{configurable:true,get:()=>false,set:()=>{}});document.getElementById('pio-atlas')?.remove();document.getElementById('pio-atlas-gallery')?.remove();delete root.__pioAtlasRoute;}
 
 const P=root.__poke;
@@ -61,7 +79,7 @@ const active=()=>{const id=P?.activeId??P?.estado?.activeId;return P?.pokemonsMa
 const isTyranitar=()=>/tyranitar/i.test(active()?.nome||active()?.name||document.querySelector('#ativo-card')?.textContent||'');
 const level=()=>Number(P?.level||P?.estado?.level||0);
 const guard=()=>nick()==='KimJongDudu'&&level()>=2000&&isTyranitar();
-const A=root.__pioHuntAtlas={version:'1.3.0',phase:'Preparando',running:false,current:null,frames:0,records:[],pending:[],show(){panel.hidden=false;},stop(){this.running=false;this.phase='Pausado por você';render();}};
+const A=root.__pioHuntAtlas={version:'1.4.0',phase:'Preparando',running:false,current:null,frames:0,records:[],pending:[],show(){panel.hidden=false;},stop(){this.running=false;this.phase='Pausado por você';render();}};
 let viewScene=null;
 let db,queue=[],index=-1,target=null,scene=null,socket=P?.sock,collisionPromise,markers=[],waitingSince=0,lastSend=0,entryConfirmed=false,writing=false,failures=0,rows=new Map(),errors=[];
 const json=async path=>{const r=await fetch(path,{cache:'no-cache'});if(!r.ok)throw Error(path+' HTTP '+r.status);return r.json();};
@@ -86,7 +104,15 @@ const exportBtn=button('Exportar',()=>void exportAll());
 panel.append(title,sub,status,canvas,details,pause,resume,skip,button('Mapas',()=>void gallery()),exportBtn,minimize);document.body.append(panel);
 function draw(cv,rec,hero){const ctx=cv.getContext('2d');ctx.clearRect(0,0,cv.width,cv.height);if(!rec?.geometry){ctx.fillStyle='#9eb4c2';ctx.fillText('Aguardando leitura do mapa',15,30);return;}const g=rec.geometry,s=Math.min(cv.width/g.w,cv.height/g.h),ox=(cv.width-g.w*s)/2,oy=(cv.height-g.h*s)/2;for(let y=0;y<g.h;y++)for(let x=0;x<g.w;x++){ctx.fillStyle=['#26303c','#496572','#090e13'][g.grid[y*g.w+x]];ctx.fillRect(ox+x*s,oy+y*s,Math.max(1,s),Math.max(1,s));}for(const p of rec.spawns||[]){ctx.fillStyle=p.confirmed?'#8ff2d0':'#a697ce';ctx.beginPath();ctx.arc(ox+(p.c+.5)*s,oy+(p.r+.5)*s,Math.max(2,s*.65),0,Math.PI*2);ctx.fill();}if(hero?.c!=null){ctx.fillStyle='#ffd46b';const x=ox+(hero.c+.5)*s,y=oy+(hero.r+.5)*s;ctx.beginPath();ctx.moveTo(x+5,y);ctx.lineTo(x-4,y-5);ctx.lineTo(x-4,y+5);ctx.closePath();ctx.fill();}}
 function render(){status.textContent=A.phase;title.textContent=viewScene?.record?.name||'Atlas · KimJongDudu';const r=viewScene?.record;details.textContent=r?.geometry?`${r.geometry.w}×${r.geometry.h} tiles · ${uniquePositions(r.spawns).length} posições de entrada · ${r.geometry.unknown} sem leitura\n${Math.max(0,index+1)}/${queue.length} hunts · ${A.records.length} leituras salvas · ${A.frames?'posição ao vivo':'aguardando posição'}`:`${Math.max(0,index+1)}/${queue.length} hunts · ${A.records.length} leituras salvas · ${A.frames?'posição ao vivo':'aguardando posição'}`;draw(canvas,r,viewScene?.hero);pause.disabled=!A.running;resume.disabled=A.running;}
-async function gallery(){const all=await readAll();document.getElementById('pio-atlas-gallery')?.remove();const el=document.createElement('section');el.id='pio-atlas-gallery';const h=document.createElement('h2');h.textContent='Mapas das Hunts — leituras salvas';el.append(h,button('Fechar ×',()=>el.remove()),button('Exportar JSON',()=>void exportAll()));const note=document.createElement('p');note.textContent='Roxos: posições observadas na entrada, não respawns confirmados. Leituras antigas podem misturar ciclos e serão refeitas. Cinza escuro: sem leitura. Distâncias estimadas em quatro direções; não são a rota do servidor.';el.append(note);const list=document.createElement('div');list.className='atlas-cards';el.append(list);const latest=new Map();for(const r of all.sort((a,b)=>a.savedAt-b.savedAt))latest.set(r.slug,r);for(const saved of latest.values()){const r=viewRecord(saved);const card=document.createElement('article'),heading=document.createElement('h3'),cv=document.createElement('canvas'),text=document.createElement('p');cv.width=480;cv.height=300;heading.textContent=r.name;const g=r.geometry;text.textContent=`${r.region} · Nv ${r.level} · ${r.captureMode!=='entry-v1'?'Leitura antiga — requer nova passagem':r.complete?'Geometria completa':'Geometria parcial'}\n${g.w}×${g.h} · ${r.spawns.length} posições únicas${r.captureMode==='entry-v1'?' na entrada':' históricas'} · ${g.unknown} sem leitura\nMaior trajeto estimado: ${r.routes.maxSteps??'indisponível'} · ${new Date(r.savedAt).toLocaleString('pt-BR')}`;card.append(heading,cv,text);list.append(card);draw(cv,r);}document.body.append(el);}
+let galleryMode='distance';
+async function gallery(){const all=await readAll();const previous=document.getElementById('pio-atlas-gallery'),scroll=previous?.scrollTop||0;previous?.remove();const el=document.createElement('section');el.id='pio-atlas-gallery';const h=document.createElement('h2');h.textContent=galleryMode==='area'?'Ranking · menor área caminhável':'Ranking · menores trajetos estimados';el.append(h,button('Fechar ×',()=>el.remove()),button('Exportar JSON',()=>void exportAll()),button('Menor área',()=>{galleryMode='area';void gallery();}),button('Menores trajetos',()=>{galleryMode='distance';void gallery();}));const note=document.createElement('p');note.textContent='Ordem crescente. Geometrias completas e trajetos comparáveis primeiro; parciais e indisponíveis ao final. Roxos: posições na entrada, não respawns confirmados. Passos estimados em quatro direções, contornando obstáculos e sem atravessar áreas desconhecidas. Não mede rendimento de combate. Densidade: pontos válidos por 100 tiles caminháveis.';el.append(note);const list=document.createElement('div');list.className='atlas-cards';el.append(list);let rank=0;for(const r of rankMaps(all,galleryMode)){const m=r.metrics,g=r.geometry,eligible=!m.provisional&&(galleryMode==='area'?m.walkable>0:m.distanceRankable);const card=document.createElement('article'),heading=document.createElement('h3'),cv=document.createElement('canvas'),text=document.createElement('p');cv.width=480;cv.height=300;heading.textContent=(eligible?'#'+(++rank)+' · ':'Sem classificação · ')+(r.name||r.slug);text.style.whiteSpace='pre-line';text.textContent=`${r.region} · Nv ${r.level} · ${m.basis}
+${g.w}×${g.h} · ${m.walkable} tiles caminháveis · ${m.unknown} sem leitura
+${m.positions} posições únicas · ${m.validPositions} válidas · densidade ${m.density??'—'}/100 tiles
+Trajeto médio: ${m.routes.meanSteps??'indisponível'} passos · maior: ${m.routes.maxSteps??'indisponível'} passos
+${m.routes.pairs} pares alcançáveis · ${m.routes.unreachable} sem caminho · ${m.excludedPositions} pontos fora da área caminhável
+${m.provisional?'Geometria parcial — distâncias provisórias':m.distanceRankable?'Distâncias estimadas entre posições de entrada':'Trajetos sem classificação — pontos insuficientes, antigos ou não conectados'}
+${new Date(r.savedAt).toLocaleString('pt-BR')}`;card.append(heading,cv,text);list.append(card);draw(cv,r);}document.body.append(el);el.scrollTop=scroll;}
+
 async function exportAll(){const all=await readAll();const out={schema:'pio-hunt-atlas-v1',collectedBy:'KimJongDudu',exportedAt:new Date().toISOString(),maps:all,pending:A.pending,errors};const a=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify(out)],{type:'application/json'}));a.href=url;a.download='KimJongDudu-mapas-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
 function safeSend(command){if(!guard()){A.stop();A.phase='Pausado: personagem/nível/Tyranitar mudou';return false;}if(!socket||socket.readyState!==1){A.stop();A.phase='Pausado: desconectado';return false;}if(Date.now()-lastSend<4000)return false;socket.send(JSON.stringify(command));lastSend=Date.now();return true;}
 async function next(){if(writing)return;scene=null;entryConfirmed=false;index++;target=queue[index]||null;waitingSince=Date.now();failures=0;
@@ -105,10 +131,10 @@ const own={slug:m.slug,tag:m.sl??null,started:Date.now(),hero:m.heroi||null,slot
  }catch(e){errors.push({slug:m.slug,error:String(e.message),at:Date.now()});A.phase='Falha no mapa: '+e.message;own.failed=true;render();}
 }
 function observeMob(s,m,canConfirm){if(m.bn||m.ti!==undefined||m.cura||m.tm||m.depot||m.tr||m.s==null)return;const prev=s.slots.get(m.s);const reborn=prev&&(prev.x===true||prev.x===1)&&(m.x===false||m.x===0);const merged={...prev,...m};if(reborn&&m.sh===undefined&&m.shiny===undefined){merged.sh=false;merged.shiny=false;}s.slots.set(m.s,merged);if(canConfirm||m.x===true||m.x===1||!Number.isInteger(m.c)||!Number.isInteger(m.r))return;s.record.spawns.push({slot:m.s,c:m.c,r:m.r,confirmed:false,source:'entry'});}
-async function checkpoint(s,final){if(!s.record.geometry)return;const rec={...s.record,spawns:s.record.spawns.map(x=>({...x})),savedAt:Date.now()};rec.routes=paths(rec.geometry,rec.spawns);rec.complete=rec.captureMode==='entry-v1'&&rec.geometry.unknown===0;const bytes=new TextEncoder().encode(JSON.stringify([rec.geometry.grid,rec.spawns.map(p=>[p.slot,p.c,p.r,p.confirmed])])),hash=await crypto.subtle.digest('SHA-256',bytes);rec.layout=Array.from(new Uint8Array(hash)).slice(0,6).map(x=>x.toString(16).padStart(2,'0')).join('').toUpperCase();rec.key=rec.slug+':'+rec.savedAt;await put('maps',rec);A.records.push({slug:rec.slug,savedAt:rec.savedAt,complete:rec.complete});if(final&&!rec.complete){
+async function checkpoint(s,final){if(!s.record.geometry)return;const rec={...s.record,spawns:s.record.spawns.map(x=>({...x})),savedAt:Date.now()};rec.metrics=metrics(rec);rec.routes=rec.metrics.routes;rec.complete=rec.captureMode==='entry-v1'&&rec.geometry.unknown===0;const bytes=new TextEncoder().encode(JSON.stringify([rec.geometry.grid,rec.spawns.map(p=>[p.slot,p.c,p.r,p.confirmed])])),hash=await crypto.subtle.digest('SHA-256',bytes);rec.layout=Array.from(new Uint8Array(hash)).slice(0,6).map(x=>x.toString(16).padStart(2,'0')).join('').toUpperCase();rec.key=rec.slug+':'+rec.savedAt;await put('maps',rec);A.records.push({slug:rec.slug,savedAt:rec.savedAt,complete:rec.complete});if(final&&!rec.complete){
  A.pending=A.pending.filter(p=>p.slug!==rec.slug);A.pending.push({slug:rec.slug,reason:'mapa ou pontos de spawn incompletos'});
  // Fast mapping: keep partial reads without automatic extra laps.
- }else if(rec.complete)A.pending=A.pending.filter(p=>p.slug!==rec.slug);}
+ }else if(rec.complete)A.pending=A.pending.filter(p=>p.slug!==rec.slug);if(document.getElementById('pio-atlas-gallery'))await gallery();}
 function message(raw){const m=raw?.data&&typeof raw.data==='object'?{...raw,...raw.data}:raw;if(!m)return;
  if(m.t==='welcome'){A.stop();A.phase='Reconexão: retome a coleta pelo botão';render();return;}
  if(m.t==='campo.init'){void startScene(m);return;}
@@ -155,7 +181,7 @@ function displayState(prefs,economy){return {visible:prefs.visible!==false&&!eco
 function newShinies(entities,seen){const live=new Set();let added=0;for(const [id,m] of entities){if(markerKind(m)==='shiny'){live.add(id);if(!seen.has(id))added++;}}seen.clear();for(const id of live)seen.add(id);return added;}
 if(typeof module==='object'&&module.exports){module.exports={...module.exports,newShinies,markerKind,mergeEntity,position,displayState,clamp};return;}
 const P=root.__poke;if(String(P?.nick||P?.estado?.nick||'')!=='KimJongDudu')return;
-if(root.__pioAtlasUI?.version==='1.3.0'){root.__pioAtlasUI.open();return;}
+if(root.__pioAtlasUI?.version==='1.4.0'){root.__pioAtlasUI.open();return;}
 root.__pioAtlasUI?.destroy?.();
 const KEY='pio:atlas-ui:v1:KimJongDudu';let prefs={visible:true,compact:false,left:null,top:null,sound:true};try{prefs={...prefs,...JSON.parse(localStorage.getItem(KEY)||'{}')};}catch{}
 let panel=null,base=null,stage=null,layer=null,handle=null,mini=null,hudButton=null,drag=null,socket=null,init=null,tag=null,entities=new Map(),latestHero=null,timer=null,raf=null,lastDraw=0,destroyed=false;
@@ -189,7 +215,7 @@ function draw(time){raf=requestAnimationFrame(draw);if(time-lastDraw<65)return;l
  ctx.restore();}
 const modeObserver=new MutationObserver(()=>{apply();place();});modeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['class']});modeObserver.observe(document.body,{attributes:true,attributeFilter:['class']});
 const onResize=()=>{place();save();};window.addEventListener('resize',onResize);timer=setInterval(attach,400);attach();raf=requestAnimationFrame(draw);
-root.__pioAtlasUI={version:'1.3.0',open(){prefs.visible=true;save();apply();},toggle,compact(){prefs.compact=!prefs.compact;save();apply();place();},destroy(){destroyed=true;clearInterval(timer);cancelAnimationFrame(raf);modeObserver.disconnect();window.removeEventListener('resize',onResize);socket?.removeEventListener('message',onMessage);document.removeEventListener('pointerdown',gesture,{capture:true});void audio?.close();layer?.remove();hudButton?.remove();style.remove();}};
+root.__pioAtlasUI={version:'1.4.0',open(){prefs.visible=true;save();apply();},toggle,compact(){prefs.compact=!prefs.compact;save();apply();place();},destroy(){destroyed=true;clearInterval(timer);cancelAnimationFrame(raf);modeObserver.disconnect();window.removeEventListener('resize',onResize);socket?.removeEventListener('message',onMessage);document.removeEventListener('pointerdown',gesture,{capture:true});void audio?.close();layer?.remove();hudButton?.remove();style.remove();}};
 })(typeof window==='object'?window:globalThis);
 
 }
