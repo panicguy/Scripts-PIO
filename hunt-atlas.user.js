@@ -1,13 +1,22 @@
 // ==UserScript==
 // @name         Atlas de Hunts — completo (KimJongDudu)
 // @namespace    local.pio.hunt-atlas
-// @version      1.1.0
+// @version      1.1.1
 // @description  Coletor, galeria, troca segura de hunts e minimapa móvel com marcadores normais e shiny. Arquivo único.
 // @match        https://pokeidle.io/*
 // @updateURL    https://raw.githubusercontent.com/panicguy/Scripts-PIO/main/hunt-atlas.user.js
 // @downloadURL  https://raw.githubusercontent.com/panicguy/Scripts-PIO/main/hunt-atlas.user.js
 // @grant        none
 // ==/UserScript==
+
+(function(root){
+function launch(){
+ const p=root.__poke;
+ if(!document.body||!document.getElementById('tr-rank-box')||!p?.sock||!String(p.nick||p.estado?.nick||''))return false;
+ if(String(p.nick||p.estado?.nick||'')!=='KimJongDudu')return true;
+ start();return true;
+}
+function start(){
 (function(root){
 'use strict';
 const REGIONS=new Set(['outland','johto','hoenn','sinnoh']);
@@ -37,7 +46,7 @@ function paths(g,spawns){
 }
 if(typeof module==='object'&&module.exports){module.exports={region,catalog,geometry,paths};return;}
 if(String(root.__poke?.nick||root.__poke?.estado?.nick||'')!=='KimJongDudu')return;
-if(root.__pioHuntAtlas?.version==='1.1.0'){root.__pioHuntAtlas.show?.();return;}
+if(root.__pioHuntAtlas?.version==='1.1.1'){root.__pioHuntAtlas.show?.();return;}
 if(root.__pioHuntAtlas){const old=root.__pioHuntAtlas;old.stop?.();Object.defineProperty(old,'running',{configurable:true,get:()=>false,set:()=>{}});document.getElementById('pio-atlas')?.remove();document.getElementById('pio-atlas-gallery')?.remove();delete root.__pioAtlasRoute;}
 
 const P=root.__poke;
@@ -48,7 +57,7 @@ const active=()=>{const id=P?.activeId??P?.estado?.activeId;return P?.pokemonsMa
 const isTyranitar=()=>/tyranitar/i.test(active()?.nome||active()?.name||document.querySelector('#ativo-card')?.textContent||'');
 const level=()=>Number(P?.level||P?.estado?.level||0);
 const guard=()=>nick()==='KimJongDudu'&&level()>=2000&&isTyranitar();
-const A=root.__pioHuntAtlas={version:'1.1.0',phase:'Preparando',running:false,current:null,frames:0,records:[],pending:[],show(){panel.hidden=false;},stop(){this.running=false;this.phase='Pausado por você';render();}};
+const A=root.__pioHuntAtlas={version:'1.1.1',phase:'Preparando',running:false,current:null,frames:0,records:[],pending:[],show(){panel.hidden=false;},stop(){this.running=false;this.phase='Pausado por você';render();}};
 let db,queue=[],index=-1,target=null,scene=null,socket=P?.sock,collisionPromise,markers=[],waitingSince=0,lastSend=0,entryConfirmed=false,writing=false,failures=0,rows=new Map(),errors=[];
 const json=async path=>{const r=await fetch(path,{cache:'no-cache'});if(!r.ok)throw Error(path+' HTTP '+r.status);return r.json();};
 const openDB=()=>new Promise((resolve,reject)=>{const q=indexedDB.open('PIO-HuntAtlas-v1',1);q.onupgradeneeded=()=>{q.result.createObjectStore('maps',{keyPath:'key'});q.result.createObjectStore('run',{keyPath:'key'});};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);});
@@ -134,7 +143,7 @@ function position(e,now){if(!e?.step)return Number.isFinite(e?.c)&&Number.isFini
 function displayState(prefs,economy){return {visible:prefs.visible!==false&&!economy,compact:prefs.compact===true};}
 if(typeof module==='object'&&module.exports){module.exports={...module.exports,markerKind,mergeEntity,position,displayState,clamp};return;}
 const P=root.__poke;if(String(P?.nick||P?.estado?.nick||'')!=='KimJongDudu')return;
-if(root.__pioAtlasUI?.version==='1.1.0'){root.__pioAtlasUI.open();return;}
+if(root.__pioAtlasUI?.version==='1.1.1'){root.__pioAtlasUI.open();return;}
 root.__pioAtlasUI?.destroy?.();
 const KEY='pio:atlas-ui:v1:KimJongDudu';let prefs={visible:true,compact:false,left:null,top:null};try{prefs={...prefs,...JSON.parse(localStorage.getItem(KEY)||'{}')};}catch{}
 let panel=null,base=null,stage=null,layer=null,handle=null,mini=null,hudButton=null,drag=null,socket=null,init=null,tag=null,entities=new Map(),latestHero=null,timer=null,raf=null,lastDraw=0,destroyed=false;
@@ -163,5 +172,14 @@ function draw(time){raf=requestAnimationFrame(draw);if(time-lastDraw<65)return;l
  ctx.restore();}
 const modeObserver=new MutationObserver(()=>{apply();place();});modeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['class']});modeObserver.observe(document.body,{attributes:true,attributeFilter:['class']});
 const onResize=()=>{place();save();};window.addEventListener('resize',onResize);timer=setInterval(attach,400);attach();raf=requestAnimationFrame(draw);
-root.__pioAtlasUI={version:'1.1.0',open(){prefs.visible=true;save();apply();},toggle,compact(){prefs.compact=!prefs.compact;save();apply();place();},destroy(){destroyed=true;clearInterval(timer);cancelAnimationFrame(raf);modeObserver.disconnect();window.removeEventListener('resize',onResize);socket?.removeEventListener('message',onMessage);layer?.remove();hudButton?.remove();style.remove();}};
+root.__pioAtlasUI={version:'1.1.1',open(){prefs.visible=true;save();apply();},toggle,compact(){prefs.compact=!prefs.compact;save();apply();place();},destroy(){destroyed=true;clearInterval(timer);cancelAnimationFrame(raf);modeObserver.disconnect();window.removeEventListener('resize',onResize);socket?.removeEventListener('message',onMessage);layer?.remove();hudButton?.remove();style.remove();}};
+})(typeof window==='object'?window:globalThis);
+
+}
+if(typeof module==='object'&&module.exports){start();return;}
+if(!launch()){
+ const key='__pioAtlasBoot';
+ if(root[key])clearInterval(root[key]);
+ root[key]=setInterval(()=>{if(launch()){clearInterval(root[key]);delete root[key];}},500);
+}
 })(typeof window==='object'?window:globalThis);
