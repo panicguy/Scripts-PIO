@@ -83,3 +83,7 @@ Cada mudança observada para um tile vizinho conta um passo (inclusive diagonal)
 A interface mantém somente Menor área e Menores trajetos. A coleta não exige mais duas rodadas: pode terminar após 15 segundos quando todos os pontos esperados forem confirmados, ou salvar uma leitura parcial após três minutos; o bloqueio por shiny permanece. Os dados históricos são preservados.
 
 Pokémon no respawn usa primeiro o total esperado já salvo na leitura e, se ausente, o total de pontos informado pelo catálogo atual da mesma hunt. Ambos são identificados como esperados. Se não houver total disponível, mostra somente a quantidade de coordenadas confirmadas e informa que o total é desconhecido. Isso funciona com mapas antigos sem refazer a coleta; não inventa um total a partir de uma leitura parcial.
+
+## Filtros de região — versão 1.7.4
+
+Menor área e Menores trajetos têm um seletor Região com Todas, Outland, Outras regiões (Johto, Hoenn e Sinnoh), e cada região individualmente. Cada menu mantém sua seleção enquanto a página estiver aberta. A classificação reinicia em #1 dentro do filtro escolhido. O filtro afeta apenas a visualização dos mapas salvos; não altera a fila de coleta nem os arquivos exportados.
