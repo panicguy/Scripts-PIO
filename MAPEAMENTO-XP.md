@@ -15,3 +15,9 @@ Parar salva a sessão atual como parcial. F5/reconexão não retoma automaticame
 Os dados ficam no IndexedDB local PIO-XPMapping-v1, loja results, sem apagar PIO-HuntAtlas-v1. Resultados mostra as sessões por hunt e Exportar gera JSON. Atualize o Atlas para 1.9.0 ou superior para exibir as medições nos cartões já mapeados. O Atlas prefere a leitura completa mais recente, ou a parcial mais recente quando não há completa. Se ainda não houver mapa daquela hunt, o resultado continua acessível no script de XP; não cria geometria fictícia.
 
 Validação automatizada cobre filtros de eventos, sete hunts, isolamento dos contadores entre hunts, cálculo de taxas de 15 minutos, bônus variável, expiração e dados ausentes. A sequência de 1h45 ainda requer validação no jogo.
+
+## Retomada após queda — versão 1.1.0
+
+Iniciar / Retomar lê as sessões persistidas e pula as hunts com uma medição completa de 15 minutos. Uma tentativa parcial mais recente não invalida uma medição completa anterior. Exemplo: Yanmega, Staravia e Drifblim completas, Kricketune parcial → começa por Kricketune. Somente a hunt interrompida reinicia seus 15 minutos; não soma o tempo desconectado nem mistura o trecho parcial com a nova sessão. Resultados anteriores permanecem guardados.
+
+A gravação periódica passa a cada dez segundos e também registra o início da sessão. Após F5 continua desligado, exibindo quantas hunts concluídas encontrou. Clique Iniciar / Retomar para continuar. Recomeçar do zero pede confirmação e marca uma nova rodada, sem apagar o histórico; a retomada dessa nova rodada considera apenas as medições iniciadas a partir dessa marca. Se todas as sete já estiverem completas, a retomada não navega para nenhuma hunt.
