@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Atlas de Hunts — completo (KimJongDudu)
 // @namespace    local.pio.hunt-atlas
-// @version      1.7.4
+// @version      1.8.0
 // @description  Coletor, galeria, troca segura de hunts e minimapa móvel com marcadores normais e shiny. Arquivo único.
 // @match        https://pokeidle.io/*
 // @updateURL    https://raw.githubusercontent.com/panicguy/Scripts-PIO/main/hunt-atlas.user.js
@@ -51,7 +51,9 @@ function liveShiny(mobs){return [...mobs].some(m=>!m.bn&&m.ti===undefined&&!m.cu
 
 function trackSteps(w,hero){if(!hero||!Number.isInteger(hero.c)||!Number.isInteger(hero.r))return;const prev=w.last;if(prev){const dx=Math.abs(hero.c-prev.c),dy=Math.abs(hero.r-prev.r);if(Math.max(dx,dy)===1)w.steps++;else if(dx||dy)w.gaps++;}w.last={c:hero.c,r:hero.r};}
 function birthCycles(rec){const points=uniquePositions(rec.spawns).filter(p=>p.confirmed),keys=new Set(points.map(p=>p.c+':'+p.r));let completed=0,seen=new Set(),stepsTwoCycles=null,gapsTwoCycles=null;for(const e of rec.births||[]){if(!keys.has(e.key))continue;seen.add(e.key);if(keys.size&&seen.size===keys.size){completed++;seen.clear();if(completed===2){stepsTwoCycles=e.steps;gapsTwoCycles=e.gaps;break;}}}return {completed,points:keys.size,stepsTwoCycles,gapsTwoCycles,remaining:Math.max(0,keys.size-seen.size)};}
-function respawnCount(rec,hunts=[]){const saved=Number(rec.expected);if(Number.isFinite(saved)&&saved>0)return saved+' (esperados)';const hunt=hunts.find(h=>h.slug===rec.slug),count=(hunt?.especies||[]).reduce((n,e)=>n+(Number(e.pontos)||0),0);if(count>0)return count+' (esperados)';const confirmed=uniquePositions(rec.spawns).filter(p=>p.confirmed).length;return confirmed>0?confirmed+' confirmados; total desconhecido':'não registrado';}
+function respawnCount(rec){const count=uniquePositions(rec.spawns).filter(p=>p.confirmed).length;return count>0?String(count):'não confirmado';}
+function collectionReady(s,now){const confirmed=s.record.spawns.filter(p=>p.confirmed).length,elapsed=now-s.started;return !!s.record.geometry&&confirmed>=2&&elapsed>=15000&&(confirmed===s.record.expected||now-(s.lastNewPoint||s.started)>=30000);}
+
 function metrics(rec){
  const g=rec.geometry;if(!g)return null;
  const positions=uniquePositions(rec.spawns).filter(p=>rec.captureMode==='respawn-v2'?p.confirmed:true),walkable=g.grid.filter(v=>v===1).length;
@@ -70,9 +72,9 @@ function rankMaps(records,mode='distance',selectedRegion='all'){
  });
 }
 function viewRecord(r){const spawns=uniquePositions(r.spawns);return {...r,spawns,metrics:metrics({...r,spawns}),complete:r.captureMode==='respawn-v2'&&r.complete};}
-if(typeof module==='object'&&module.exports){module.exports={region,catalog,geometry,paths,uniquePositions,liveShiny,viewRecord,metrics,rankMaps,observeMob,trackSteps,birthCycles,respawnCount};return;}
+if(typeof module==='object'&&module.exports){module.exports={region,catalog,geometry,paths,uniquePositions,liveShiny,viewRecord,metrics,rankMaps,observeMob,trackSteps,birthCycles,respawnCount,collectionReady};return;}
 if(String(root.__poke?.nick||root.__poke?.estado?.nick||'')!=='KimJongDudu')return;
-if(root.__pioHuntAtlas?.version==='1.7.4'){root.__pioHuntAtlas.show?.();return;}
+if(root.__pioHuntAtlas?.version==='1.8.0'){root.__pioHuntAtlas.show?.();return;}
 if(root.__pioHuntAtlas){const old=root.__pioHuntAtlas;old.stop?.();Object.defineProperty(old,'running',{configurable:true,get:()=>false,set:()=>{}});document.getElementById('pio-atlas')?.remove();document.getElementById('pio-atlas-gallery')?.remove();delete root.__pioAtlasRoute;}
 
 const P=root.__poke;
@@ -83,7 +85,7 @@ const active=()=>{const id=P?.activeId??P?.estado?.activeId;return P?.pokemonsMa
 const isTyranitar=()=>/tyranitar/i.test(active()?.nome||active()?.name||document.querySelector('#ativo-card')?.textContent||'');
 const level=()=>Number(P?.level||P?.estado?.level||0);
 const guard=()=>nick()==='KimJongDudu'&&level()>=2000&&isTyranitar();
-const A=root.__pioHuntAtlas={version:'1.7.4',phase:'Desligado — clique em Iniciar',started:false,running:false,current:null,frames:0,records:[],pending:[],show(){panel.hidden=false;},stop(){this.running=false;this.phase='Pausado por você';render();}};
+const A=root.__pioHuntAtlas={version:'1.8.0',phase:'Desligado — clique em Iniciar',started:false,running:false,current:null,frames:0,records:[],pending:[],show(){panel.hidden=false;},stop(){this.running=false;this.phase='Pausado por você';render();}};
 let viewScene=null,clearing=false,dataEpoch=0;
 let db,queue=[],index=-1,target=null,scene=null,socket=P?.sock,collisionPromise,markers=[],waitingSince=0,lastSend=0,entryConfirmed=false,writing=false,failures=0,rows=new Map(),errors=[];
 const json=async path=>{const r=await fetch(path,{cache:'no-cache'});if(!r.ok)throw Error(path+' HTTP '+r.status);return r.json();};
@@ -111,14 +113,21 @@ const clearBtn=button('Limpar todos os mapeamentos',()=>void clearAllMaps());
 
 panel.append(title,sub,status,canvas,details,startStop,pause,skip,button('Mapas',()=>void gallery()),exportBtn,minimize,clearBtn);document.body.append(panel);
 function draw(cv,rec,hero){const ctx=cv.getContext('2d');ctx.clearRect(0,0,cv.width,cv.height);if(!rec?.geometry){ctx.fillStyle='#9eb4c2';ctx.fillText('Aguardando leitura do mapa',15,30);return;}const g=rec.geometry,s=Math.min(cv.width/g.w,cv.height/g.h),ox=(cv.width-g.w*s)/2,oy=(cv.height-g.h*s)/2;for(let y=0;y<g.h;y++)for(let x=0;x<g.w;x++){ctx.fillStyle=['#26303c','#496572','#090e13'][g.grid[y*g.w+x]];ctx.fillRect(ox+x*s,oy+y*s,Math.max(1,s),Math.max(1,s));}for(const p of rec.spawns||[]){ctx.fillStyle=p.confirmed?'#8ff2d0':'#a697ce';ctx.beginPath();ctx.arc(ox+(p.c+.5)*s,oy+(p.r+.5)*s,Math.max(2,s*.65),0,Math.PI*2);ctx.fill();}if(hero?.c!=null){ctx.fillStyle='#ffd46b';const x=ox+(hero.c+.5)*s,y=oy+(hero.r+.5)*s;ctx.beginPath();ctx.moveTo(x+5,y);ctx.lineTo(x-4,y-5);ctx.lineTo(x-4,y+5);ctx.closePath();ctx.fill();}}
-function render(){status.textContent=A.phase;title.textContent=(A.running&&target?(target.nome||target.name||target.slug):viewScene?.record?.name)||'Atlas · KimJongDudu';const r=viewScene?.record;details.textContent=r?.geometry?`${r.geometry.w}×${r.geometry.h} tiles · ${r.spawns.filter(p=>p.confirmed).length}/${r.expected||'?'} nascimentos confirmados · ${r.geometry.unknown} sem leitura\n${Math.max(0,index+1)}/${queue.length} hunts · ${A.records.length} leituras salvas · ${A.frames?'posição ao vivo':'aguardando posição'}`:`${Math.max(0,index+1)}/${queue.length} hunts · ${A.records.length} leituras salvas · ${A.frames?'posição ao vivo':'aguardando posição'}`;draw(canvas,r,viewScene?.hero);startStop.textContent=A.started?'Parar':'Iniciar';pause.textContent=A.running?'Pausar':'Retomar';pause.disabled=!A.started;skip.disabled=!A.running;}
+function render(){status.textContent=A.phase;title.textContent=(A.running&&target?(target.nome||target.name||target.slug):viewScene?.record?.name)||'Atlas · KimJongDudu';const r=viewScene?.record;details.textContent=r?.geometry?`${r.geometry.w}×${r.geometry.h} tiles · ${r.spawns.filter(p=>p.confirmed).length} pontos de nascimento confirmados · ${r.geometry.unknown} sem leitura\n${Math.max(0,index+1)}/${queue.length} hunts · ${A.records.length} leituras salvas · ${A.frames?'posição ao vivo':'aguardando posição'}`:`${Math.max(0,index+1)}/${queue.length} hunts · ${A.records.length} leituras salvas · ${A.frames?'posição ao vivo':'aguardando posição'}`;draw(canvas,r,viewScene?.hero);startStop.textContent=A.started?'Parar':'Iniciar';pause.textContent=A.running?'Pausar':'Retomar';pause.disabled=!A.started;skip.disabled=!A.running;}
 let galleryMode='distance';const galleryRegions={area:'all',distance:'all'};
-async function gallery(){const all=await readAll();const previous=document.getElementById('pio-atlas-gallery'),scroll=previous?.scrollTop||0;previous?.remove();const el=document.createElement('section');el.id='pio-atlas-gallery';const h=document.createElement('h2');h.textContent=galleryMode==='area'?'Ranking · menor área caminhável':'Ranking · menores trajetos estimados';el.append(h,button('Fechar ×',()=>el.remove()),button('Exportar JSON',()=>void exportAll()),button('Limpar todos os mapeamentos',()=>void clearAllMaps()),button('Menor área',()=>{galleryMode='area';void gallery();}),button('Menores trajetos',()=>{galleryMode='distance';void gallery();}));const note=document.createElement('p');note.textContent=galleryMode==='area'?'Menor área: compara a quantidade de tiles caminháveis do mapa. Mapas com menos espaço livre ficam primeiro; não considera a distância entre os respawns.':'Menores trajetos: compara a média de passos estimados entre os pontos de respawn confirmados, contornando obstáculos. Pontos mais próximos ficam primeiro; não mede o percurso real do Tyranitar.';el.append(note);const filterLabel=document.createElement('label');filterLabel.textContent='Região: ';const filter=document.createElement('select');filter.setAttribute('aria-label','Filtrar ranking por região');filter.style.cssText='padding:7px;margin:10px 0;background:#233d4e;color:#e5f0f4;border:1px solid #62818d;border-radius:6px';for(const [value,label] of [['all','Todas'],['outland','Outland'],['others','Outras regiões'],['johto','Johto'],['hoenn','Hoenn'],['sinnoh','Sinnoh']]){const option=document.createElement('option');option.value=value;option.textContent=label;filter.append(option);}filter.value=galleryRegions[galleryMode];filter.onchange=()=>{galleryRegions[galleryMode]=filter.value;el.scrollTop=0;void gallery();};filterLabel.append(filter);el.append(filterLabel);const list=document.createElement('div');list.className='atlas-cards';el.append(list);let rank=0;for(const r of rankMaps(all,galleryMode,galleryRegions[galleryMode])){const m=r.metrics,g=r.geometry,eligible=galleryMode==='area'?!m.provisional&&m.walkable>0:m.distanceRankable;const card=document.createElement('article'),heading=document.createElement('h3'),cv=document.createElement('canvas'),text=document.createElement('p');cv.width=480;cv.height=300;heading.textContent=(eligible?'#'+(++rank)+' · ':'')+(r.name||r.slug)+' · Nv '+r.level;text.style.whiteSpace='pre-line';text.textContent=`Mapa: ${r.region}
+async function gallery(){const all=await readAll();const previous=document.getElementById('pio-atlas-gallery'),scroll=previous?.scrollTop||0;previous?.remove();const el=document.createElement('section');el.id='pio-atlas-gallery';const h=document.createElement('h2');h.textContent=galleryMode==='area'?'Ranking · menor área caminhável':'Ranking · menores trajetos estimados';el.append(h,button('Fechar ×',()=>el.remove()),button('Exportar JSON',()=>void exportAll()),button('Limpar todos os mapeamentos',()=>void clearAllMaps()),button('Menor área',()=>{galleryMode='area';void gallery();}),button('Menores trajetos',()=>{galleryMode='distance';void gallery();}));const note=document.createElement('p');note.textContent=galleryMode==='area'?'Menor área: compara a quantidade de tiles caminháveis do mapa. Mapas com menos espaço livre ficam primeiro; não considera a distância entre os respawns.':'Menores trajetos: compara a média de passos estimados entre os pontos de respawn confirmados, contornando obstáculos. Pontos mais próximos ficam primeiro; não mede o percurso real do Tyranitar.';el.append(note);const filterLabel=document.createElement('label');filterLabel.textContent='Região: ';const filter=document.createElement('select');filter.setAttribute('aria-label','Filtrar ranking por região');filter.style.cssText='padding:7px;margin:10px 0;background:#233d4e;color:#e5f0f4;border:1px solid #62818d;border-radius:6px';for(const [value,label] of [['all','Todas'],['outland','Outland'],['johto','Johto'],['hoenn','Hoenn'],['sinnoh','Sinnoh']]){const option=document.createElement('option');option.value=value;option.textContent=label;filter.append(option);}filter.value=galleryRegions[galleryMode];filter.onchange=()=>{galleryRegions[galleryMode]=filter.value;el.scrollTop=0;void gallery();};filterLabel.append(filter);el.append(filterLabel);const list=document.createElement('div');list.className='atlas-cards';el.append(list);let rank=0;for(const r of rankMaps(all,galleryMode,galleryRegions[galleryMode])){const m=r.metrics,g=r.geometry,eligible=galleryMode==='area'?!m.provisional&&m.walkable>0:m.distanceRankable;const card=document.createElement('article'),heading=document.createElement('h3'),cv=document.createElement('canvas'),text=document.createElement('p');cv.width=480;cv.height=300;heading.textContent=(eligible?'#'+(++rank)+' · ':'')+(r.name||r.slug)+' · Nv '+r.level;text.style.whiteSpace='pre-line';text.textContent=`Mapa: ${r.region}
 Tamanho: ${g.w} × ${g.h} tiles
 Pokémon no respawn: ${respawnCount(r,P.hunts||P.ws?.welcome?.hunts||[])}
 Passos médios estimados: ${m.routes.meanSteps??'aguardando'}
-Mapeado em ${new Date(r.savedAt).toLocaleString('pt-BR')}`;card.append(heading,cv,text);list.append(card);draw(cv,r);}if(!list.children.length){const empty=document.createElement('p');empty.textContent='Nenhum mapa salvo nesta região.';list.append(empty);}document.body.append(el);el.scrollTop=scroll;}
+Mapeado em ${new Date(r.savedAt).toLocaleString('pt-BR')}`;card.append(heading,cv,text,button('Refazer este mapa',()=>void remapOne(r)));list.append(card);draw(cv,r);}if(!list.children.length){const empty=document.createElement('p');empty.textContent='Nenhum mapa salvo nesta região.';list.append(empty);}document.body.append(el);el.scrollTop=scroll;}
 
+async function remapOne(rec){
+ if(writing){root.alert('Aguarde o mapa atual terminar de salvar e tente novamente.');return;}
+ if(clearing||!db||!guard()){A.phase='Não iniciou: confirme KimJongDudu Nv 2000 com Tyranitar';render();return;}
+ const hunt=(P.hunts||P.ws?.welcome?.hunts||[]).find(h=>h.slug===rec.slug);
+ if(!hunt||Number(hunt.nivel)>Math.min(2000,level())){root.alert('Esta hunt não está disponível no catálogo atual.');return;}
+ stopCollection();queue=[{...hunt,region:region(hunt,markers)}];index=-1;target=null;A.started=true;A.running=true;lastSend=0;document.getElementById('pio-atlas-gallery')?.remove();await next();
+}
 async function restartOrdered(){
  if(clearing||!db||!guard()){A.phase='Não iniciou: aguarde os dados e confirme KimJongDudu Nv 2000 com Tyranitar';render();return;}
  A.stop();dataEpoch++;const epoch=dataEpoch;A.started=true;scene=null;entryConfirmed=false;A.phase='Preparando fila A–Z';render();
@@ -140,7 +149,7 @@ async function clearAllMaps(){
 async function exportAll(){const all=await readAll();const out={schema:'pio-hunt-atlas-v1',collectedBy:'KimJongDudu',exportedAt:new Date().toISOString(),maps:all,pending:A.pending,errors};const a=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify(out)],{type:'application/json'}));a.href=url;a.download='KimJongDudu-mapas-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
 function safeSend(command){if(!guard()){A.stop();A.phase='Pausado: personagem/nível/Tyranitar mudou';return false;}if(!socket||socket.readyState!==1){A.stop();A.phase='Pausado: desconectado';return false;}if(Date.now()-lastSend<4000)return false;socket.send(JSON.stringify(command));lastSend=Date.now();return true;}
 async function next(){if(writing||!A.running)return;scene=null;entryConfirmed=false;index++;target=queue[index]||null;waitingSince=Date.now();failures=0;
- if(!target){A.running=false;A.phase='Varredura concluída · '+A.pending.length+' pendências';await recordRun();render();return;}
+ if(!target){A.running=false;A.started=false;A.phase='Varredura concluída · '+A.pending.length+' pendências';await recordRun();render();return;}
  A.phase=(Number(target.attempt||1)>1?'Revisão · ':'')+target.region+' · Entrando em '+(target.nome||target.slug);await recordRun();if(!A.running)return;safeSend({t:'hunt.select',slug:target.slug});render();}
 async function startScene(m){if(m.centro||m.pvp||m.casa!=null){viewScene=null;scene=null;A.current=null;render();return;}
 const collecting=A.running&&m.slug===target?.slug;const hunt=(P.hunts||P.ws?.welcome?.hunts||[]).find(h=>h.slug===m.slug)||{};if(collecting)entryConfirmed=true;
@@ -151,7 +160,7 @@ const own={slug:m.slug,tag:m.sl??null,started:Date.now(),hero:m.heroi||null,slot
  try{collisionPromise??=json('/assets/world/collision.json');const [map,col]=await Promise.all([json('/assets/world/maps/'+encodeURIComponent(own.record.mapSlug)+'.json'),collisionPromise]);
   if(viewScene!==own)return;
   // Preserve visual map holes as unknown: decorative client patches do not prove server collision.
-  own.record.geometry=geometry(map,col,m.box,m.groundZ);if(collecting)await checkpoint(own,false);render();
+  own.record.geometry=geometry(map,col,m.box,m.groundZ);if(collecting)A.phase='Geometria lida — observando pontos de nascimento';render();
  }catch(e){errors.push({slug:m.slug,error:String(e.message),at:Date.now()});A.phase='Falha no mapa: '+e.message;own.failed=true;render();}
 }
 function observeMob(s,m,canConfirm){
@@ -162,12 +171,12 @@ function observeMob(s,m,canConfirm){
  const stationary=(!Number.isFinite(m.dc)||m.dc===m.c)&&(!Number.isFinite(m.dr)||m.dr===m.r);
  const born=canConfirm&&stationary&&(reborn||(!prev&&(m.x===false||m.x===0)));
  if(!canConfirm)s.record.spawns.push({slot:m.s,c:m.c,r:m.r,confirmed:false,source:'entry'});
- if(born){s.record.births??=[];s.record.births.push({key:m.c+':'+m.r,steps:s.record.walk?.steps??0,gaps:s.record.walk?.gaps??0});s.record.spawns=s.record.spawns.filter(p=>p.confirmed||p.slot!==m.s);s.record.spawns.push({slot:m.s,c:m.c,r:m.r,confirmed:true,source:'observed-birth'});s.record.spawns=uniquePositions(s.record.spawns);}
+ if(born){if(!s.record.spawns.some(p=>p.confirmed&&p.c===m.c&&p.r===m.r))s.lastNewPoint=Date.now();s.record.births??=[];s.record.births.push({key:m.c+':'+m.r,steps:s.record.walk?.steps??0,gaps:s.record.walk?.gaps??0});s.record.spawns=s.record.spawns.filter(p=>p.confirmed||p.slot!==m.s);s.record.spawns.push({slot:m.s,c:m.c,r:m.r,confirmed:true,source:'observed-birth'});s.record.spawns=uniquePositions(s.record.spawns);}
 }
 
 async function checkpoint(s,final){if(clearing||!s.record.geometry)return;const epoch=dataEpoch;const rec={...s.record,spawns:s.record.spawns.map(x=>({...x})),births:(s.record.births||[]).map(e=>({...e})),walk:s.record.walk?{...s.record.walk,last:s.record.walk.last?{...s.record.walk.last}:null}:null,savedAt:Date.now()};rec.metrics=metrics(rec);rec.routes=rec.metrics.routes;rec.complete=rec.captureMode==='respawn-v2'&&rec.expected>0&&rec.spawns.filter(p=>p.confirmed).length===rec.expected;const bytes=new TextEncoder().encode(JSON.stringify([rec.geometry.grid,rec.spawns.map(p=>[p.slot,p.c,p.r,p.confirmed])])),hash=await crypto.subtle.digest('SHA-256',bytes);rec.layout=Array.from(new Uint8Array(hash)).slice(0,6).map(x=>x.toString(16).padStart(2,'0')).join('').toUpperCase();rec.key=rec.slug+':'+rec.savedAt;if(clearing||epoch!==dataEpoch)return;await put('maps',rec);if(clearing||epoch!==dataEpoch)return;A.records.push({slug:rec.slug,savedAt:rec.savedAt,complete:rec.complete});if(final&&!rec.complete){
  A.pending=A.pending.filter(p=>p.slug!==rec.slug);A.pending.push({slug:rec.slug,reason:'mapa ou pontos de spawn incompletos'});
- const attempt=Number(target?.attempt||1);if(attempt<3)queue.push({...target,attempt:attempt+1});
+ // Partial readings stay pending for manual remapping; never repeat the queue automatically.
  }else if(rec.complete)A.pending=A.pending.filter(p=>p.slug!==rec.slug);if(document.getElementById('pio-atlas-gallery'))await gallery();}
 function message(raw){const m=raw?.data&&typeof raw.data==='object'?{...raw,...raw.data}:raw;if(!m)return;
  if(m.t==='welcome'){A.stop();A.phase='Reconexão: retome a coleta pelo botão';render();return;}
@@ -178,7 +187,7 @@ function message(raw){const m=raw?.data&&typeof raw.data==='object'?{...raw,...r
 let busy=false;
 async function tick(){if(busy||!A.running)return;busy=true;try{if(!guard()){A.stop();A.phase='Pausado: Tyranitar/conta mudou';render();return;}if(!socket||socket.readyState!==1){A.stop();A.phase='Pausado: conexão fechada';render();return;}
  if(!entryConfirmed&&target){if(root.__pioAtlasRoute?.pending){waitingSince=Date.now();return;}const elapsed=Date.now()-waitingSince;if(elapsed>45000){A.stop();A.phase='Entrada não confirmada em '+(target.nome||target.name||target.slug)+' — pausado sem pular. Clique em Retomar para tentar novamente.';render();}else if(Date.now()-lastSend>8000){safeSend({t:'hunt.select',slug:target.slug});}return;}
- if(scene){if(liveShiny(scene.slots.values())){A.phase='Shiny vivo no mapa — permanecendo nesta hunt';render();return;}const elapsed=Date.now()-scene.started,confirmed=scene.record.spawns.filter(p=>p.confirmed).length,ready=scene.record.geometry&&scene.record.expected>0&&confirmed===scene.record.expected;if((ready&&elapsed>=15000)||elapsed>=180000||scene.failed){writing=true;try{await checkpoint(scene,true);}catch(e){A.stop();A.phase='Falha ao salvar — coleta interrompida';render();return;}finally{writing=false;}await recordRun();if(A.running)await next();}}
+ if(scene){if(liveShiny(scene.slots.values())){A.phase='Shiny vivo no mapa — permanecendo nesta hunt';render();return;}const elapsed=Date.now()-scene.started,ready=collectionReady(scene,Date.now());if((ready&&elapsed>=15000)||elapsed>=180000||scene.failed){writing=true;try{await checkpoint(scene,true);}catch(e){A.stop();A.phase='Falha ao salvar — coleta interrompida';render();return;}finally{writing=false;}await recordRun();if(A.running)await next();}}
  }finally{busy=false;}}
 (function(){
 'use strict';
@@ -216,7 +225,7 @@ function displayState(prefs,economy){return {visible:prefs.visible!==false&&!eco
 function newShinies(entities,seen){const live=new Set();let added=0;for(const [id,m] of entities){if(markerKind(m)==='shiny'){live.add(id);if(!seen.has(id))added++;}}seen.clear();for(const id of live)seen.add(id);return added;}
 if(typeof module==='object'&&module.exports){module.exports={...module.exports,newShinies,markerKind,mergeEntity,position,displayState,clamp};return;}
 const P=root.__poke;if(String(P?.nick||P?.estado?.nick||'')!=='KimJongDudu')return;
-if(root.__pioAtlasUI?.version==='1.7.4'){root.__pioAtlasUI.open();return;}
+if(root.__pioAtlasUI?.version==='1.8.0'){root.__pioAtlasUI.open();return;}
 root.__pioAtlasUI?.destroy?.();
 const KEY='pio:atlas-ui:v1:KimJongDudu';let prefs={visible:true,compact:false,left:null,top:null,sound:true};try{prefs={...prefs,...JSON.parse(localStorage.getItem(KEY)||'{}')};}catch{}
 let panel=null,base=null,stage=null,layer=null,handle=null,mini=null,hudButton=null,drag=null,socket=null,init=null,tag=null,entities=new Map(),latestHero=null,timer=null,raf=null,lastDraw=0,destroyed=false;
@@ -250,7 +259,7 @@ function draw(time){raf=requestAnimationFrame(draw);if(time-lastDraw<65)return;l
  ctx.restore();}
 const modeObserver=new MutationObserver(()=>{apply();place();});modeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['class']});modeObserver.observe(document.body,{attributes:true,attributeFilter:['class']});
 const onResize=()=>{place();save();};window.addEventListener('resize',onResize);timer=setInterval(attach,400);attach();raf=requestAnimationFrame(draw);
-root.__pioAtlasUI={version:'1.7.4',open(){prefs.visible=true;save();apply();},toggle,compact(){prefs.compact=!prefs.compact;save();apply();place();},destroy(){destroyed=true;clearInterval(timer);cancelAnimationFrame(raf);modeObserver.disconnect();window.removeEventListener('resize',onResize);socket?.removeEventListener('message',onMessage);document.removeEventListener('pointerdown',gesture,{capture:true});void audio?.close();layer?.remove();hudButton?.remove();style.remove();}};
+root.__pioAtlasUI={version:'1.8.0',open(){prefs.visible=true;save();apply();},toggle,compact(){prefs.compact=!prefs.compact;save();apply();place();},destroy(){destroyed=true;clearInterval(timer);cancelAnimationFrame(raf);modeObserver.disconnect();window.removeEventListener('resize',onResize);socket?.removeEventListener('message',onMessage);document.removeEventListener('pointerdown',gesture,{capture:true});void audio?.close();layer?.remove();hudButton?.remove();style.remove();}};
 })(typeof window==='object'?window:globalThis);
 
 }
