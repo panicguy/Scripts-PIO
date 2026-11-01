@@ -95,3 +95,7 @@ Cada cartão oferece Refazer este mapa. O Atlas interrompe sua fila atual e cole
 O filtro Outras regiões foi removido. Pokémon no respawn mostra apenas a contagem de coordenadas de nascimento confirmadas, deduplicadas, sem apresentar o número previsto pelo catálogo como medido. Quando não há confirmação, mostra não confirmado. Isso é cobertura observada, não garantia de total real se a leitura for parcial.
 
 A passagem pode encerrar quando a contagem coincide com o catálogo após 15 segundos, ou quando há pelo menos dois pontos confirmados e passam 30 segundos sem descobrir outra coordenada, com geometria disponível. A divergência do catálogo mantém a leitura parcial; não obriga a esperar por um ponto que não foi observado. O limite continua três minutos e o shiny vivo continua segurando a saída. Leituras parciais não voltam automaticamente à fila; use Refazer este mapa para tentar novamente.
+
+## Resultados de XP — Atlas 1.9.0
+
+Instale separadamente [Mapeamento de XP](https://github.com/panicguy/Scripts-PIO/blob/main/mapeamento-xp.user.js). As instruções estão em [MAPEAMENTO-XP.md](MAPEAMENTO-XP.md). O Atlas consulta as medições locais e adiciona XP/h de treinador/Pokémon, abates, abates/h e bônus aos cartões da hunt correspondente. Os bancos de mapas e de XP são separados. Atualizar o Atlas não inicia nenhuma medição.
