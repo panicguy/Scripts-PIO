@@ -87,3 +87,11 @@ Pokémon no respawn usa primeiro o total esperado já salvo na leitura e, se aus
 ## Filtros de região — versão 1.7.4
 
 Menor área e Menores trajetos têm um seletor Região com Todas, Outland, Outras regiões (Johto, Hoenn e Sinnoh), e cada região individualmente. Cada menu mantém sua seleção enquanto a página estiver aberta. A classificação reinicia em #1 dentro do filtro escolhido. O filtro afeta apenas a visualização dos mapas salvos; não altera a fila de coleta nem os arquivos exportados.
+
+## Refazer somente uma hunt — versão 1.8.0
+
+Cada cartão oferece Refazer este mapa. O Atlas interrompe sua fila atual e coleta somente a hunt escolhida, usando a saída segura pelo Centro. Não apaga o histórico nem outros mapas. A nova leitura substitui a anterior na visualização quando for salva ao final; deixou de salvar um cartão inicial vazio sobre a leitura existente. Aguarde uma gravação em andamento antes de solicitar outra coleta.
+
+O filtro Outras regiões foi removido. Pokémon no respawn mostra apenas a contagem de coordenadas de nascimento confirmadas, deduplicadas, sem apresentar o número previsto pelo catálogo como medido. Quando não há confirmação, mostra não confirmado. Isso é cobertura observada, não garantia de total real se a leitura for parcial.
+
+A passagem pode encerrar quando a contagem coincide com o catálogo após 15 segundos, ou quando há pelo menos dois pontos confirmados e passam 30 segundos sem descobrir outra coordenada, com geometria disponível. A divergência do catálogo mantém a leitura parcial; não obriga a esperar por um ponto que não foi observado. O limite continua três minutos e o shiny vivo continua segurando a saída. Leituras parciais não voltam automaticamente à fila; use Refazer este mapa para tentar novamente.
