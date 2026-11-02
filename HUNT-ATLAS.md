@@ -109,3 +109,7 @@ Cartões de mapas ganham retrato ao lado do nome, inclusive nas leituras antigas
 Sprites e crédito: [Pokémon Database](https://pokemondb.net/sprites). Cada retrato tem um link de crédito para a página da espécie e o minimapa inclui crédito da fonte. O catálogo de identificadores das espécies é derivado do arquivo público pokemon_species.csv do [PokeAPI](https://github.com/PokeAPI/pokeapi/blob/master/data/v2/csv/pokemon_species.csv). As imagens são carregadas do domínio img.pokemondb.net. Os dados e resultados locais não são enviados a esse domínio.
 
 Testes automatizados cobrem resolução de nomes/prefixos/ID, fontes normal/shiny e desenho do Tyranitar e dos selvagens nas posições dos pacotes. Ainda é necessário conferir a aparência no jogo real. Atualizar não inicia o coletor automaticamente.
+
+## Compatibilidade das sprites — versão 1.10.1
+
+Acrescenta identificação por lista Map e pelo nome do cartão do Pokémon ativo, tolerando nível e refino no texto. Pacotes de selvagem sem nome podem usar a hunt quando ela tiver somente uma espécie; hunts mistas sem identificação mantêm o marcador. Adiciona imagens do repositório público PokeAPI/sprites como última alternativa se Pokémon Database não carregar. Testes simulam pacote sem nome e cartão Brave Tyranitar +1 Nv 2024. Os endereços públicos de imagem responderam HTTP 200 no teste de rede, mas a aparência precisa de validação no cliente real.
