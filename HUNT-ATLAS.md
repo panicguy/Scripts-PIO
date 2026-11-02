@@ -99,3 +99,13 @@ A passagem pode encerrar quando a contagem coincide com o catálogo após 15 seg
 ## Resultados de XP — Atlas 1.9.0
 
 Instale separadamente [Mapeamento de XP](https://github.com/panicguy/Scripts-PIO/blob/main/mapeamento-xp.user.js). As instruções estão em [MAPEAMENTO-XP.md](MAPEAMENTO-XP.md). O Atlas consulta as medições locais e adiciona XP/h de treinador/Pokémon, abates, abates/h e bônus aos cartões da hunt correspondente. Os bancos de mapas e de XP são separados. Atualizar o Atlas não inicia nenhuma medição.
+
+## Sprites no minimapa — versão 1.10.0
+
+O minimapa desenha a sprite do Pokémon ativo sobre sua posição recebida do jogo (com contorno azul), e as sprites dos Pokémon selvagens vivos sobre suas posições interpoladas. Shinys usam a variante shiny com destaque rosa. Os pontos fixos de nascimento continuam no mapa como referência e corpos/NPCs continuam ocultos. Sem imagem disponível, mantém os marcadores anteriores. Os bitmaps são carregados uma vez por espécie/variante durante a página, com fallback para sprites Home; mover-se não baixa a mesma imagem a cada quadro.
+
+Cartões de mapas ganham retrato ao lado do nome, inclusive nas leituras antigas: não precisa refazer a geometria. Nomes personalizados como Brave Tyranitar e Ancient Dragonair são associados à espécie oficial; o retrato não representa uma forma exclusiva do PokeIdle. Espécies desconhecidas permanecem sem retrato, em vez de inventar uma imagem.
+
+Sprites e crédito: [Pokémon Database](https://pokemondb.net/sprites). Cada retrato tem um link de crédito para a página da espécie e o minimapa inclui crédito da fonte. O catálogo de identificadores das espécies é derivado do arquivo público pokemon_species.csv do [PokeAPI](https://github.com/PokeAPI/pokeapi/blob/master/data/v2/csv/pokemon_species.csv). As imagens são carregadas do domínio img.pokemondb.net. Os dados e resultados locais não são enviados a esse domínio.
+
+Testes automatizados cobrem resolução de nomes/prefixos/ID, fontes normal/shiny e desenho do Tyranitar e dos selvagens nas posições dos pacotes. Ainda é necessário conferir a aparência no jogo real. Atualizar não inicia o coletor automaticamente.
