@@ -21,7 +21,6 @@
 | --- | --- | --- |
 | [AutoDex](autodex.user.js) | Completa a Pokédex ou refaz capturas na corrida semanal, com ordem por nível (padrão), número da Dex ou aleatória; agenda o retorno ao Centro após capturar. | 0.2.6 |
 | [Auto-Sniper](auto-sniper.user.js) | Reúne regras de compra automática, consultas e operações do mercado, estatísticas de farm, catálogos de hunts e bosses e ferramentas de oferendas em um cockpit dentro do jogo. | 1.5.2.1 |
-
 | [Dock e Chocadeira](pio-dock.user.js) | Menu recolhível com chocadeira automática por comandos, independente em cada conta. [Como usar](PIO-DOCK.md). | 1.0.0 |
 
 ## Como instalar
