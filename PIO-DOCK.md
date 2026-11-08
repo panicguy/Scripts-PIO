@@ -14,3 +14,5 @@ No hub, adicione esse endereço em Ferramentas → Scripts & Extensões. O dock 
 ## Verificação
 
 Contrato conferido no código público do PokeIdle 1.412.3. Testes automatizados cobrem inventário, prioridade, ocupação, confirmação, reconexão, envio único e isolamento das quatro contas. Alterações futuras no protocolo podem exigir atualização.
+
+Validação no hub: dock presente e automação ativada nas quatro contas. As quatro indicaram ovo chocando após confirmação do estado; a tela nativa da primeira confirmou 1/1 e o tempo de choca de um P2. O ciclo completo de seis horas ainda não foi acompanhado. Testes: `node pio-dock.test.cjs`.
